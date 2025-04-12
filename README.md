@@ -162,44 +162,179 @@ Algorithms - - No. of Routes - - Costs - - Gap(%) - - Runtime(seconds)
 
 ![3 HGS rc108](https://github.com/user-attachments/assets/afac9be9-37a1-4b4d-a7f8-5d346d653e2f) ![3 GLS rc108](https://github.com/user-attachments/assets/b8140b7f-30c2-4f65-9d55-24207754dd0f) ![3 ACO rc108](https://github.com/user-attachments/assets/3643d0e9-c3d4-418c-8ed7-efea8d94ede9) ![3 SA rc108](https://github.com/user-attachments/assets/3632158b-6131-4157-97bd-9cd4116bcecf)
 
-Solving Vehicle Routing Problems with Time Windows using multiple Classic Heuristic and metaheuristic algorithms (Hybrid Genetic Search (HGS), Guided Local Search (GLS), Ant Colony Optimization (ACO), Simulated Annealing (SA)), then comparing results with each one's results and present it in the graph. This was my master's thesis project.
+# VRPTW Solver Comparison
 
-## keywords
-Vehicle Routing Problems with Time Window (VRPTW), Hybrid Genetic Search (HGS), Guided Local Search (GLS), Ant Colony Optimization (ACO), Simulated Annealing (SA), MACS-VRPTW, Genetic Algorithm (GA), Exact, Heuristics, Metaheuristics, Machine Learning Algorithms, GRASP, Local Search (LS), Neighborhood Search, OR-Tools, VRP, VRPTW, Vehicle Routing Problems (VRP), pyVRP.
+This project is a comprehensive comparison of various algorithms for solving the **Vehicle Routing Problem with Time Windows (VRPTW)**. It implements and compares multiple heuristic and metaheuristic algorithms, including:
 
-## Important Note
-Using the Python Jupyter Notebook is highly advised. While compiling, each model executes independently. However, if you run the code straight from main.py , the application may crash and display errors due to the ACO procedure’s use of multiple threads! However, it functions perfectly now that I’m using the Python Jupyter Notebook code.
+- **Hybrid Genetic Search (HGS)**
+- **Guided Local Search (GLS)**
+- **Ant Colony Optimization (ACO)**
+- **Simulated Annealing (SA)**
 
-## More Details
-To have a thorough understanding (about the parameter tuning and machanise) of my Vehicle Routing Problem with Time Windows project, I recommend reading my master's thesis. Thank you.
+The project was developed as part of a master's thesis and provides tools to evaluate and visualize the performance of these algorithms on benchmark datasets.
 
-# Development
+---
 
-## Create venv
+## Project Structure
 
-```sh
-python -m venv .venv
-```
+### Key Files and Directories
 
-## Activate venv
+- **`main.py`**: The main script to run the project. It orchestrates the execution of all algorithms and generates results.
+- **`solver.ipynb`**: A Jupyter Notebook for running and visualizing the algorithms interactively.
+- **`aco/`**: Contains the implementation of Ant Colony Optimization.
+- **`gls/`**: Contains the implementation of Guided Local Search.
+- **`sa/`**: Contains the implementation of Simulated Annealing.
+- **`hgs/`**: Contains the implementation of Hybrid Genetic Search.
+- **`bks.py`**: Reads and processes the Best Known Solution (BKS) for comparison.
+- **`plot.py`**: Contains utilities for visualizing solutions and routes.
+- **`data/`**: Contains benchmark datasets in Solomon format (`.txt`) and their corresponding Best Known Solutions (`.sol`).
+- **`requirements.txt`**: Lists the Python dependencies required to run the project.
 
-```sh
-. .venv/bin/activate
-```
+---
 
-## Install requirements
+## Algorithms Overview
 
-```sh
-pip install -r requirements.txt
-```
-## Run the Project
+### 1. **Hybrid Genetic Search (HGS)**
+HGS is a metaheuristic algorithm inspired by genetic algorithms. It uses a population of solutions that evolve over time through selection, crossover, and mutation. The implementation leverages the **`pyvrp`** library.
 
+- **Key Features**:
+  - Supports Solomon benchmark instances.
+  - Configurable stopping criteria: `MaxRuntime` or `MaxIterations`.
+
+- **Code Example**:
+  ```python
+  from pyvrp import Model, read
+  from pyvrp.stop import MaxRuntime
+
+  def solve_with_hgs(input_path, runtime):
+      INSTANCE = read(input_path, instance_format="solomon", round_func="trunc1")
+      model = Model.from_data(INSTANCE)
+      result = model.solve(stop=MaxRuntime(runtime), seed=0)
+
+      print("HGS cost:", result.cost() / 10)
+      print("HGS solution:")
+      print(result.best)
+
+      routes = [route.visits() for route in result.best.get_routes()]
+      return routes, round(result.cost() / 10, 1)
+  ```
+
+### 2. **Guided Local Search (GLS)**
+GLS enhances local search by penalizing frequently used solution components, encouraging exploration of less-visited areas of the solution space.
+
+- **Key Features**:
+  - Uses OR-Tools for routing and optimization.
+  - Configurable time limits for solving.
+
+- **Code Example**:
+  ```python
+  from gls.base_solver import Solver
+  from gls.instance_loader import load_instance
+
+  def solve_with_gls(input_path, runtime):
+      data = load_instance(input_path, time_precision_scaler=10)
+      solver = Solver(data, time_precision_scaler=10)
+      solver.create_model()
+      solver.solve_model({"time_limit": runtime})
+
+      routes = solver.get_solution()
+      cost = solver.get_solution_travel_time()
+      return routes, round(cost, 1)
+  ```
+
+### 3. **Ant Colony Optimization (ACO)**
+ACO is inspired by the behavior of ants searching for food. It uses pheromone trails to guide the search for optimal solutions.
+
+- **Key Features**:
+  - Iterative improvement based on pheromone updates.
+  - Suitable for combinatorial optimization problems.
+
+### 4. **Simulated Annealing (SA)**
+SA is a probabilistic technique that explores the solution space by accepting worse solutions with a decreasing probability over time.
+
+- **Key Features**:
+  - Configurable initial temperature and cooling schedule.
+  - Simple and effective for VRPTW.
+
+---
+
+## How to Run the Project
+
+### 1. **Setup the Environment**
+1. Create a virtual environment:
+   ```sh
+   python -m venv .venv
+   ```
+2. Activate the virtual environment:
+   - On Linux/Mac:
+     ```sh
+     source .venv/bin/activate
+     ```
+   - On Windows:
+     ```sh
+     .venv\Scripts\activate
+     ```
+3. Install the required dependencies:
+   ```sh
+   pip install -r requirements.txt
+   ```
+
+### 2. **Run the Main Script**
+Execute the main script to run all algorithms and generate results:
 ```sh
 python main.py
 ```
 
-## Clone git repository URL 
-
+### 3. **Run the Jupyter Notebook**
+For interactive exploration and visualization:
 ```sh
-git clone {paste repository URL}
+jupyter notebook solver.ipynb
 ```
+
+---
+
+## Visualizing Results
+
+The project generates visualizations of the routes for each algorithm. These are plotted using `matplotlib` and can be customized in the `plot.py` file.
+
+---
+
+## Addressing the HGS Question
+
+### Problem: Same Solution for Different Stopping Criteria
+The issue arises because the **`pyvrp`** library uses a fixed random seed (`seed=0`) in the `solve` function. This ensures reproducibility but results in the same solution for the same instance, regardless of the stopping criteria.
+
+### Solution:
+To introduce variability, modify the `seed` parameter to a random value or remove it entirely:
+```python
+from random import randint
+
+result = model.solve(stop=MaxRuntime(runtime), seed=randint(0, 1000))
+```
+
+Alternatively, you can experiment with different stopping criteria:
+- **MaxRuntime**: Limits the runtime of the algorithm.
+- **MaxIterations**: Limits the number of iterations.
+
+### Example Output:
+For the provided instance, the HGS algorithm produces the following solution:
+```
+Hybrid Genetic Search (HGS) Route Cost: 1114.2
+
+HGS solution:
+Route #1: 12 14 47 17 16 15 13 9 11 10
+Route #2: 82 99 52 86 87 59 97 75 58 74
+...
+```
+
+---
+
+## Contact
+
+For further questions or issues, feel free to reach out.
+
+Best regards,  
+
+Arnob
+
+arnob_t78@yahoo.com
