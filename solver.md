@@ -168,11 +168,13 @@ result
 To run this notebook:
 
 1. **Using Jupyter Notebook:**
+
    ```bash
    jupyter notebook solver.ipynb
    ```
 
 2. **Using Python script:**
+
    ```bash
    python main.py
    ```
@@ -216,4 +218,3 @@ After running all cells, you should see:
 ---
 
 **Note:** This markdown file is a readable version of the Jupyter notebook. For interactive execution, use `solver.ipynb` with Jupyter Notebook or VS Code.
-
