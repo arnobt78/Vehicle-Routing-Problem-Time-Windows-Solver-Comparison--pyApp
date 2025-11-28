@@ -751,6 +751,7 @@ This allows you to:
 If `solver.ipynb` doesn't render on GitHub (shows "Unable to render code block"), don't worry! The file is perfectly valid and will work correctly when downloaded and opened locally. This is a known GitHub rendering issue and does not affect the file's functionality.
 
 **The notebook will work perfectly in:**
+
 - Jupyter Notebook
 - JupyterLab
 - VS Code (with Jupyter extension)
