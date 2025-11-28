@@ -746,6 +746,19 @@ This allows you to:
 - Experiment with parameters
 - Analyze results interactively
 
+**Note about `solver.ipynb` on GitHub:**
+
+If `solver.ipynb` doesn't render on GitHub (shows "Unable to render code block"), don't worry! The file is perfectly valid and will work correctly when downloaded and opened locally. This is a known GitHub rendering issue and does not affect the file's functionality.
+
+**The notebook will work perfectly in:**
+- Jupyter Notebook
+- JupyterLab
+- VS Code (with Jupyter extension)
+- Google Colab
+- Any Jupyter-compatible environment
+
+**Alternative:** If you want to view the notebook content on GitHub, check out [solver.md](solver.md) - a markdown version that always renders correctly on GitHub.
+
 ---
 
 ## Environment Variables
