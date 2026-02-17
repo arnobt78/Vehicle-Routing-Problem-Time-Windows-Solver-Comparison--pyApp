@@ -6,9 +6,10 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system deps if needed (e.g. for some Python packages)
+# Install system deps: gcc/g++ for building pyvrp from source (C++ extension)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better layer caching
