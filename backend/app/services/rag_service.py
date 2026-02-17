@@ -723,15 +723,19 @@ def get_rag_answer(question: str) -> str:
 
 
 def rag_available() -> tuple[bool, str | None]:
-    """Return (True, None) if RAG is ready, else (False, reason)."""
-    with _rag_lock:
+    """Return (True, None) if RAG is ready, else (False, reason). Never blocks: if lock is held (bootstrap loading), returns 'RAG is loading...'."""
+    if not _rag_lock.acquire(blocking=False):
+        return False, "RAG is loading..."
+    try:
         if _rag_unavailable_reason is not None:
             return False, _rag_unavailable_reason
         if _vector_store is not None:
             return True, None
         if CHROMA_PERSIST_DIR.exists() and any(CHROMA_PERSIST_DIR.iterdir()):
             return True, None
-    return False, "Index not built yet. Click Reindex RAG to create it."
+        return False, "Index not built yet. Click Reindex RAG to create it."
+    finally:
+        _rag_lock.release()
 
 
 def rag_reindex() -> dict:
