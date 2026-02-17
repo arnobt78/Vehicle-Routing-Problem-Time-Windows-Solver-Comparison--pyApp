@@ -37,6 +37,8 @@ downloads/
 eggs/
 .eggs/
 lib/
+!frontend/src/lib/
+!frontend/src/lib/**
 lib64/
 parts/
 sdist/
@@ -73,6 +75,7 @@ coverage.xml
 
 # Virtual Environments
 venv/
+venv-ils/
 env/
 ENV/
 env.bak/
@@ -93,16 +96,20 @@ venv.bak/
 .ipynb_checkpoints
 *.ipynb_checkpoints/
 
-# Environment variables
+# Environment variables (never commit real secrets)
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!**/.env.example
 
 # Project specific (if you want to ignore test results or generated images)
 # Uncomment if needed:
 # test results/
 # *.png
 # *.pdf
+
+# RAG vector store (Chroma persistence)
+backend/data/
 
 # mypy
 .mypy_cache/
@@ -118,3 +125,31 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
+# Documentation
+AI_MODEL_IMPLEMENTATION_GUIDE.md
+PROJECT_PLAN.md
+Referred_Research_Papers_List.txt
+
+# --- VRPTW monorepo generated artifacts ---
+# Packaged test-result bundle (manually generated)
+backend/test_results.zip
+
+# Optional large local research PDFs (keep local only)
+Referred_Research_Papers/
+
+# Backend runtime env/cache
+backend/.venv/
+backend/venv/
+backend/venv-ils/
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+
+# Frontend build cache/output
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Documentation files
+HETZNER_VPS_MIGRATION_GUIDE.md
+SUBDOMAIN_ARNOBMAHMUD_SETUP.md

@@ -1,0 +1,28 @@
+# Virtual envs and local env
+venv/
+venv-ils/
+.venv/
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Git and IDE
+.git/
+.idea/
+.vscode/
+
+# Docs and misc (keep app/, dataset/, algorithm_docs/, requirements)
+*.md
+!algorithm_docs/
+
+# Large/generated (optional: uncomment if you don't want them in image)
+# test_results/
+# test_results.zip
+# data/

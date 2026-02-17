@@ -1,0 +1,11 @@
+# Python 3.11 or 3.12 recommended (3.13: pyvrp has no wheels, build fails)
+certifi>=2024.0.0
+ortools>=9.12.0
+pandas>=2.2.0
+pydantic>=2.5.0
+pyvrp==0.6.3
+# Optional for ILS: pip install 'pyvrp>=0.13' (replaces 0.6.3; use one or the other)
+tabulate==0.9.0
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-dotenv>=1.0.0
