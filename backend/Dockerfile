@@ -30,4 +30,5 @@ ENV BACKEND_ALGOS=${BACKEND_ALGOS}
 # ENV DATASET_PATH=dataset
 # ENV DEFAULT_RUNTIME=120
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "5000"]
+# run_server.py uses log_config to suppress 404 access logs (bot probes)
+CMD ["python", "run_server.py"]
