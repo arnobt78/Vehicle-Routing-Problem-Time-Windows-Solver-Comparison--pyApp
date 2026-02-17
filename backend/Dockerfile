@@ -13,11 +13,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better layer caching
-COPY requirements.txt requirements-ils.txt ./
+COPY requirements.txt requirements-ils.txt requirements-rag.txt ./
 
 # Install the chosen requirements (default: main backend). Build with --build-arg REQUIREMENTS_FILE=requirements-ils.txt for ILS.
 ARG REQUIREMENTS_FILE=requirements.txt
 RUN pip install --no-cache-dir -r ${REQUIREMENTS_FILE}
+
+# RAG (AI assistant) on both vrptw-api and vrptw-ils
+RUN pip install --no-cache-dir -r requirements-rag.txt
 
 COPY . .
 
