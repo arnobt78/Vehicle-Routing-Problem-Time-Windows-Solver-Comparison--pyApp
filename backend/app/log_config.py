@@ -31,7 +31,8 @@ def get_log_config() -> dict:
                 "format": "%(levelname)s:     %(message)s",
             },
             "access": {
-                "format": '%(levelname)s:     %(client_addr)s - "%(request_line)s" %(status_code)s',
+                # uvicorn passes (client_addr, method, path, version, status) as msg % args
+                "format": "%(levelname)s:     %(message)s",
             },
         },
         "filters": {
