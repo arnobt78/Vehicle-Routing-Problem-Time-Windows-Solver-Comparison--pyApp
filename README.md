@@ -346,14 +346,14 @@ DEFAULT_RUNTIME=120
 
 | Variable                    | Required      | Description                                                                            |
 | --------------------------- | ------------- | -------------------------------------------------------------------------------------- |
-| `VITE_API_URL`              | Yes (for API) | Main backend base URL (e.g. `http://localhost:8000`)                                   |
+| `VITE_API_URL`              | Yes (for API) | Main backend base URL (e.g. `http://localhost:5000`)                                   |
 | `VITE_ILS_API_URL`          | No            | ILS backend base URL (e.g. `http://localhost:8001`) when using Option A (two backends) |
 | `VITE_TEST_RESULTS_ZIP_URL` | No            | Override for Results page zip download URL                                             |
 
 **Example `frontend/.env`:**
 
 ```env
-VITE_API_URL=http://localhost:8000
+VITE_API_URL=http://localhost:5000
 # VITE_ILS_API_URL=http://localhost:8001
 ```
 
@@ -370,7 +370,7 @@ All `VITE_*` variables are embedded at **build time**; change and rebuild for pr
 ```bash
 cd backend
 source venv/bin/activate
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 5000
 ```
 
 **Terminal 2 – Frontend:**
@@ -394,7 +394,7 @@ Because **pyvrp 0.6.3** (HGS) and **pyvrp ≥0.13** (ILS) cannot coexist in one 
 cd backend
 source venv/bin/activate
 export BACKEND_ALGOS=hgs,gls,aco,sa
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 5000
 ```
 
 **Terminal 2 – ILS backend:**

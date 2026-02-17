@@ -36,7 +36,7 @@ cp .env.example .env
 
 | Variable                    | Description                                                  |
 | --------------------------- | ------------------------------------------------------------ |
-| `VITE_API_URL`              | Main backend base URL (e.g. `http://localhost:8000`)         |
+| `VITE_API_URL`              | Main backend base URL (e.g. `http://localhost:5000`)         |
 | `VITE_ILS_API_URL`          | Optional; ILS backend URL when using two backends (Option A) |
 | `VITE_TEST_RESULTS_ZIP_URL` | Optional; override zip download URL for Results page         |
 

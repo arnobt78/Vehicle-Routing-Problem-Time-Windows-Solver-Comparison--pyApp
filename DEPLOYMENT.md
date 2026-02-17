@@ -12,7 +12,7 @@ Run two backend services and have the frontend call the right one by algorithm.
 
 | Service      | Port (example) | PyVRP  | Algorithms        |
 |-------------|-----------------|--------|-------------------|
-| Backend HGS | 8000            | 0.6.3  | HGS, ACO, GLS, SA |
+| Backend HGS | 5000            | 0.6.3  | HGS, ACO, GLS, SA |
 | Backend ILS | 8001            | ≥0.13  | ILS only          |
 
 - **Frontend**: Single app. Uses `VITE_API_URL` for most requests; uses `VITE_ILS_API_URL` only for ILS (solve, stream, results, plot). Same API contract on both backends.
@@ -30,7 +30,7 @@ One “main” backend (PyVRP 0.6.3) handles HGS, ACO, GLS, SA and the public AP
 
 - **Main backend**: For `POST /api/solve/ils` it forwards the request to the ILS worker, receives `job_id`, and returns that (or a wrapped id). For `GET /api/solve/{job_id}/stream` and `GET /api/results/{job_id}` (and plot), if the job is an ILS job, the main backend **proxies** to the ILS worker.
 - **Frontend**: Still uses a single `VITE_API_URL`; no change.
-- **Deploy**: Main app (e.g. port 8000) + ILS worker (e.g. port 8001). Main backend has `ILS_SERVICE_URL=http://localhost:8001` (or internal URL in production).
+- **Deploy**: Main app (e.g. port 5000) + ILS worker (e.g. port 8001). Main backend has `ILS_SERVICE_URL=http://localhost:8001` (or internal URL in production).
 
 **Pros:** One API for the frontend; one place to add auth, rate limits, etc.  
 **Cons:** Backend must implement proxy and (optionally) job-id mapping.
@@ -69,7 +69,7 @@ The frontend is already wired for Option A. When `VITE_ILS_API_URL` is set, it w
 
 ```env
 # Main backend (HGS, ACO, GLS, SA)
-VITE_API_URL=http://localhost:8000
+VITE_API_URL=http://localhost:5000
 
 # ILS backend (only used when user selects ILS or when Compare includes ILS)
 # Omit or leave empty to use a single backend.
@@ -79,7 +79,7 @@ VITE_ILS_API_URL=http://localhost:8001
 **Running locally with two backends:**
 
 1. **Terminal 1 – Main backend (HGS, pyvrp 0.6.3)**  
-   `cd backend && source venv/bin/activate && uvicorn app.main:app --host 0.0.0.0 --port 8000`
+   `cd backend && source venv/bin/activate && uvicorn app.main:app --host 0.0.0.0 --port 5000`
 
 2. **Terminal 2 – ILS backend (pyvrp ≥0.13)**  
    Use a second copy of the backend with a separate venv where `pip install 'pyvrp>=0.13'` (and no `pyvrp==0.6.3`). Run on port 8001:  
@@ -113,8 +113,8 @@ Before first push, ensure no secrets are committed: `.env` and `.env.*` (except 
 
 - **One Dockerfile** in `backend/Dockerfile` is enough. It uses **build arguments** to produce either the main backend image (pyvrp 0.6.3) or the ILS backend image (pyvrp 0.13+).
 - **Two Coolify backend applications** (two separate “sites”/services):
-  - **App 1 – Main API (HGS, ACO, GLS, SA):** Build from repo path `backend/`, Dockerfile `Dockerfile`. Build args: `REQUIREMENTS_FILE=requirements.txt`, `BACKEND_ALGOS=hgs,gls,aco,sa`. Container port **8000**. Env: `BACKEND_ALGOS=hgs,gls,aco,sa`, `DATASET_PATH=dataset`, `CORS_ORIGINS=https://your-app.vercel.app`, plus any API keys (Gemini, etc.).
-  - **App 2 – ILS API:** Same repo, same `backend/` folder, same `Dockerfile`. Build args: `REQUIREMENTS_FILE=requirements-ils.txt`, `BACKEND_ALGOS=ils`. Container port **8000**. Env: `BACKEND_ALGOS=ils`, `DATASET_PATH=dataset`, `CORS_ORIGINS=https://your-app.vercel.app`.
+  - **App 1 – Main API (HGS, ACO, GLS, SA):** Build from repo path `backend/`, Dockerfile `Dockerfile`. Build args: `REQUIREMENTS_FILE=requirements.txt`, `BACKEND_ALGOS=hgs,gls,aco,sa`. Container port **5000**. Env: `BACKEND_ALGOS=hgs,gls,aco,sa`, `DATASET_PATH=dataset`, `CORS_ORIGINS=https://your-app.vercel.app`, plus any API keys (Gemini, etc.).
+  - **App 2 – ILS API:** Same repo, same `backend/` folder, same `Dockerfile`. Build args: `REQUIREMENTS_FILE=requirements-ils.txt`, `BACKEND_ALGOS=ils`. Container port **5000**. Env: `BACKEND_ALGOS=ils`, `DATASET_PATH=dataset`, `CORS_ORIGINS=https://your-app.vercel.app`.
 
 So: **one Dockerfile**, **two Coolify apps** with different build args and env. Each app gets its own subdomain and Let’s Encrypt certificate.
 
@@ -138,7 +138,7 @@ In Coolify, for **each** of the two backend applications:
 
 1. Use the same Traefik/Caddy label pattern as in **SUBDOMAIN_ARNOBMAHMUD_SETUP.md** (two router pairs: sslip.io + `SUBDOMAIN.arnobmahmud.com`).
 2. Replace `SUBDOMAIN` with `vrptw-api` for the main app and `vrptw-ils` for the ILS app.
-3. Set `PORT=8000` (container port).
+3. Set `PORT=5000` (container port).
 4. Use `traefik.http.routers.*.tls.certresolver=letsencrypt` so Let’s Encrypt issues certs for `vrptw-api.arnobmahmud.com` and `vrptw-ils.arnobmahmud.com`.
 
 Coolify will assign each app its own sslip hostname; use the template from SUBDOMAIN_ARNOBMAHMUD_SETUP.md and plug in the correct `SSLP_HOST` per app.
@@ -168,7 +168,7 @@ After deploy, your app URL will be something like `https://vrptw-solver.vercel.a
 |------|------------|
 | **GitHub** | Create repo (you do manually), push monorepo. Ensure .gitignore excludes .env and venvs. |
 | **Dockerfile** | One: `backend/Dockerfile`. Build args: `REQUIREMENTS_FILE`, `BACKEND_ALGOS`. |
-| **Coolify** | Two applications, both from same repo + `backend/Dockerfile`; different build args and env; container port 8000 each. |
+| **Coolify** | Two applications, both from same repo + `backend/Dockerfile`; different build args and env; container port 5000 each. |
 | **Subdomains** | Two A records → VPS IP: e.g. `vrptw-api.arnobmahmud.com`, `vrptw-ils.arnobmahmud.com`. |
 | **Let’s Encrypt** | Via Traefik labels (`certresolver=letsencrypt`) in Coolify for each app. |
 | **Vercel** | One frontend; root `frontend`, set `VITE_API_URL` and `VITE_ILS_API_URL`; add Vercel URL to both backends’ `CORS_ORIGINS`. |

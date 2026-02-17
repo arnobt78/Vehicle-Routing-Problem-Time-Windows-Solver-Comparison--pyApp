@@ -20,8 +20,8 @@ RUN pip install --no-cache-dir -r ${REQUIREMENTS_FILE}
 
 COPY . .
 
-# Expose port (Coolify/Traefik will map to container port 8000)
-EXPOSE 8000
+# Expose port (Coolify/Traefik will map to container port 5000)
+EXPOSE 5000
 
 ARG BACKEND_ALGOS=hgs,gls,aco,sa
 ENV BACKEND_ALGOS=${BACKEND_ALGOS}
@@ -29,4 +29,4 @@ ENV BACKEND_ALGOS=${BACKEND_ALGOS}
 # ENV DATASET_PATH=dataset
 # ENV DEFAULT_RUNTIME=120
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "5000"]

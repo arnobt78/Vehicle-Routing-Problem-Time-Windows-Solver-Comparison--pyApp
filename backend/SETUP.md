@@ -54,7 +54,7 @@ pip install pybind11
 pip install -r requirements.txt
 
 # Run the API
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 5000
 ```
 
 ### If you only have Python 3.13

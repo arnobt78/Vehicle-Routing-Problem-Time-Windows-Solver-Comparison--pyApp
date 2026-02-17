@@ -62,7 +62,7 @@ Use **two terminals**:
 ```bash
 cd backend
 source venv/bin/activate
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 5000
 ```
 
 ### Terminal 2 – Frontend
@@ -112,7 +112,7 @@ deactivate
 **Frontend:** set the ILS backend URL (create or edit `frontend/.env`):
 
 ```env
-VITE_API_URL=http://localhost:8000
+VITE_API_URL=http://localhost:5000
 VITE_ILS_API_URL=http://localhost:8001
 ```
 
@@ -124,7 +124,7 @@ VITE_ILS_API_URL=http://localhost:8001
 cd backend
 source venv/bin/activate
 export BACKEND_ALGOS=hgs,gls,aco,sa
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 5000
 ```
 
 (Optional: add `BACKEND_ALGOS=hgs,gls,aco,sa` to `backend/.env` so you don’t need to export.)
@@ -145,7 +145,7 @@ cd frontend
 npm run dev
 ```
 
-Open **http://localhost:5173**. Use **Run Solver** to run any of the 5 algorithms (ILS requests go to port 8001; the other 4 go to port 8000). Use **Run Benchmark** to compare all 5; the frontend will call the main backend for 4 algos and the ILS backend for ILS, then merge results.
+Open **http://localhost:5173**. Use **Run Solver** to run any of the 5 algorithms (ILS requests go to port 8001; the other 4 go to port 5000). Use **Run Benchmark** to compare all 5; the frontend will call the main backend for 4 algos and the ILS backend for ILS, then merge results.
 
 ---
 
@@ -165,7 +165,7 @@ This runs all algorithms on the configured dataset and saves plots.
 
 | Action              | Command                                     |
 | ------------------- | ------------------------------------------- |
-| Backend dev server  | `uvicorn app.main:app --reload --port 8000` |
+| Backend dev server  | `uvicorn app.main:app --reload --port 5000` |
 | Frontend dev server | `npm run dev`                               |
 | Standalone script   | `python main.py`                            |
 
