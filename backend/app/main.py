@@ -1,4 +1,5 @@
 import os
+import threading
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -43,25 +44,11 @@ app.include_router(ai.router, prefix="/api")
 app.include_router(test_results.router, prefix="/api")
 
 
-@app.on_event("startup")
-def bootstrap_rag_index_on_startup():
-    """
-    Build RAG index automatically once when missing.
-    Controlled by env: RAG_BOOTSTRAP_ON_STARTUP (default: true).
-    """
-    enabled = os.getenv("RAG_BOOTSTRAP_ON_STARTUP", "1").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-    if not enabled:
-        return
-
+def _run_rag_bootstrap() -> None:
+    """Run RAG index build in background (slow: downloads model, builds index)."""
     ok, reason = rag_available()
     if ok:
         return
-
     result = rag_ensure_index()
     if not result.get("ok", False):
         print(
@@ -75,6 +62,25 @@ def bootstrap_rag_index_on_startup():
             f"pdf_files={result.get('pdf_files', 0)}",
             f"persist_dir={result.get('persist_dir', '')}",
         )
+
+
+@app.on_event("startup")
+def bootstrap_rag_index_on_startup():
+    """
+    Build RAG index automatically once when missing.
+    Runs in a background thread so the API is ready immediately (avoids Bad Gateway
+    while embedding model downloads/loads). Controlled by env: RAG_BOOTSTRAP_ON_STARTUP (default: true).
+    """
+    enabled = os.getenv("RAG_BOOTSTRAP_ON_STARTUP", "1").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if not enabled:
+        return
+    thread = threading.Thread(target=_run_rag_bootstrap, daemon=True)
+    thread.start()
 
 
 @app.get("/test_results.zip")
