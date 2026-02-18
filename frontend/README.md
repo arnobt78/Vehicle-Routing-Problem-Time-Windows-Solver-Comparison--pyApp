@@ -2,6 +2,10 @@
 
 React + TypeScript + Vite frontend for the **VRPTW Solver Comparison** project. For full project overview, run instructions, environment variables, and API documentation, see the **[root README](../README.md)** and **[RUN.md](../RUN.md)**.
 
+- **Live-Demo:** [https://vrptw-solver.vercel.app/](https://vrptw-solver.vercel.app/)
+- **Backend 0.6.3 version:** [https://vrptw-api.arnobmahmud.com/](https://vrptw-api.arnobmahmud.com/)
+- **Backend 0.13+ version:** [https://vrptw-ils.arnobmahmud.com/](https://vrptw-ils.arnobmahmud.com/)
+
 ---
 
 ## Stack
@@ -46,7 +50,7 @@ All `VITE_*` vars are embedded at build time.
 
 ## Structure (relevant to this app)
 
-```
+```bash
 src/
 ├── App.tsx              # Router, QueryProvider, Toaster
 ├── main.tsx

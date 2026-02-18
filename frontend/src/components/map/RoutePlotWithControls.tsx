@@ -3,7 +3,7 @@ import { Copy, MoreVertical, Download, Maximize2 } from "lucide-react";
 import { getPlotUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { CopyButton } from "@/components/common/CopyButton";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -136,11 +136,11 @@ export function RoutePlotWithControls({
       </div>
 
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-        <DialogContent className="h-[90vh] max-h-[90vh] w-[90vw] max-w-[90vw] p-4">
+        <DialogContent className="h-[90vh] max-h-[90vh] w-[90vw] max-w-[90vw] p-4" aria-describedby={undefined}>
           <div className="flex h-full flex-col">
-            <p className="mb-3 pr-8 text-sm font-medium text-slate-700">
+            <DialogTitle className="mb-3 pr-8 text-sm font-medium text-slate-700">
               Route visualization preview
-            </p>
+            </DialogTitle>
             <div className="flex-1 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-2">
               <img
                 src={plotUrl}

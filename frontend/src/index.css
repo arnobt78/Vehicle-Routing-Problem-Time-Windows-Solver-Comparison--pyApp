@@ -51,6 +51,24 @@
   }
 }
 
+/* Progress bar: visible fill + subtle “in progress” animation */
+@keyframes progress-active {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+.progress-bar-track {
+  @apply h-2 w-32 overflow-hidden rounded-full bg-sky-200;
+}
+.progress-bar-fill {
+  @apply h-full rounded-full bg-sky-600 transition-[width] duration-300 ease-out;
+  animation: progress-active 1.4s ease-in-out infinite;
+}
+
 .skeleton {
   position: relative;
   overflow: hidden;

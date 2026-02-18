@@ -9,6 +9,10 @@
 
 A full-stack **Vehicle Routing Problem with Time Windows (VRPTW)** comparison platform. Run and benchmark metaheuristic algorithms (HGS, ILS, ACO, Simulated Annealing, GLS), visualize routes, tune parameters, and explore Solomon benchmark datasets—with an optional AI-assisted RAG Q&A and parameter tuning.
 
+- **Live-Demo:** [https://vrptw-solver.vercel.app/](https://vrptw-solver.vercel.app/)
+- **Backend 0.6.3 version:** [https://vrptw-api.arnobmahmud.com/](https://vrptw-api.arnobmahmud.com/)
+- **Backend 0.13+ version:** [https://vrptw-ils.arnobmahmud.com/](https://vrptw-ils.arnobmahmud.com/)
+
 ## The Comparison results of different NP metaheuristic algorithms for VRPTW
 
 Running Algorithms on dataset: rc108.txt

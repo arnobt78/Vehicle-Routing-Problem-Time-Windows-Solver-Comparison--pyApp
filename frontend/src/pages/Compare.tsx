@@ -33,7 +33,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
 type CompareRow = {
   algo: string;
@@ -1264,15 +1264,15 @@ export function Compare() {
         </div>
 
         <Dialog open={showStopDialog} onOpenChange={setShowStopDialog}>
-          <DialogContent className="max-w-md p-0">
+          <DialogContent className="max-w-md p-0" aria-describedby="stop-compare-dialog-description">
             <div className="border-b border-slate-200 px-5 py-4">
-              <h3 className="text-lg font-semibold text-slate-900">
+              <DialogTitle className="text-slate-900">
                 Stop running algorithms?
-              </h3>
-              <p className="mt-1 text-base text-slate-600">
+              </DialogTitle>
+              <DialogDescription id="stop-compare-dialog-description" className="mt-1 text-base">
                 This will mark unfinished algorithms as stopped. Completed
                 results stay available.
-              </p>
+              </DialogDescription>
             </div>
             <div className="flex justify-end gap-2 px-5 py-4">
               <button
@@ -1310,12 +1310,19 @@ export function Compare() {
 
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <progress
-                  value={progress}
-                  max={100}
-                  className="h-2 w-32 overflow-hidden rounded-full"
+                <div
+                  className="progress-bar-track"
+                  role="progressbar"
+                  aria-valuenow={progress}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
                   aria-label="Benchmark progress"
-                />
+                >
+                  <div
+                    className="progress-bar-fill"
+                    style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+                  />
+                </div>
                 <span className="text-sm font-mono tabular-nums">
                   {progress}%
                 </span>

@@ -23,7 +23,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
 const INPUT_STYLE =
   "w-full min-w-[200px] rounded-lg border border-slate-300 bg-white px-2 py-2.5 text-base text-slate-900 shadow-lg";
@@ -455,15 +455,15 @@ export function Solver() {
         </div>
 
         <Dialog open={showStopDialog} onOpenChange={setShowStopDialog}>
-          <DialogContent className="max-w-md p-0">
+          <DialogContent className="max-w-md p-0" aria-describedby="stop-dialog-description">
             <div className="border-b border-slate-200 px-5 py-4">
-              <h3 className="text-lg font-semibold text-slate-900">
+              <DialogTitle className="text-slate-900">
                 Stop running algorithm?
-              </h3>
-              <p className="mt-1 text-sm text-slate-600">
+              </DialogTitle>
+              <DialogDescription id="stop-dialog-description" className="mt-1">
                 This will stop the current run. Partial computation may not
                 produce a final solution.
-              </p>
+              </DialogDescription>
             </div>
             <div className="flex justify-end gap-2 px-5 py-4">
               <button
@@ -507,15 +507,20 @@ export function Solver() {
             </div>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <div className="h-2 w-32 overflow-hidden rounded-full bg-sky-200">
+                <div
+                  className="progress-bar-track"
+                  role="progressbar"
+                  aria-valuenow={isIndeterminate ? undefined : progress}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Solver progress"
+                >
                   {isIndeterminate ? (
-                    <div className="h-full w-1/2 animate-pulse rounded-full bg-sky-600" />
+                    <div className="progress-bar-fill w-1/2" />
                   ) : (
-                    <progress
-                      value={progress}
-                      max={100}
-                      className="h-2 w-32 overflow-hidden rounded-full"
-                      aria-label="Solver progress"
+                    <div
+                      className="progress-bar-fill"
+                      style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
                     />
                   )}
                 </div>

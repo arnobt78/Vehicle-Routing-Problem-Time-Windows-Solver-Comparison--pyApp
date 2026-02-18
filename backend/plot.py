@@ -131,11 +131,20 @@ def plot_my_solution(
     # ========================================================================
     # PLOT ROUTES
     # ========================================================================
-    # Iterate through each route in the solution
-    # enumerate with start=1 makes route numbers start from 1 (more intuitive)
-    for idx, route in enumerate(solution["routes"], 1):
+    # Normalize to list of list of int (pyvrp 0.13 may return different types)
+    routes_raw = solution.get("routes") or []
+    routes_list = []
+    for r in routes_raw:
+        try:
+            route = [int(v) for v in r]
+        except (TypeError, ValueError):
+            route = []
+        if route:
+            routes_list.append(route)
+
+    for idx, route in enumerate(routes_list, 1):
         # Get coordinates for customers in this route
-        # route is a list of customer IDs, e.g., [1, 2, 3]
+        # route is a list of customer IDs, e.g., [1, 2, 3] (1-based; 0 = depot)
         # x_coords[route] uses NumPy fancy indexing to get x-coordinates for these customers
         x = x_coords[route]
         y = y_coords[route]
@@ -162,6 +171,10 @@ def plot_my_solution(
         # Line from last customer (x[-1], y[-1]) back to depot
         # This completes the route cycle: depot -> customers -> depot
         ax.plot([x[-1], x_coords[0]], [y[-1], y_coords[0]], ls=(0, (5, 15)), linewidth=0.25, color="grey")
+
+    if not routes_list:
+        ax.text(0.5, 0.5, "No routes to display", transform=ax.transAxes,
+                ha="center", va="center", fontsize=14, color="gray")
 
     # ========================================================================
     # FORMATTING

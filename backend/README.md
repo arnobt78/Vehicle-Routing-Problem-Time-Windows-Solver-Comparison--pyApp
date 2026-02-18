@@ -2,6 +2,10 @@
 
 Python/FastAPI backend for the **VRPTW Solver Comparison** project. It runs metaheuristic algorithms (HGS, ILS, ACO, SA, GLS), serves datasets and parameters, and provides optional AI/RAG endpoints.
 
+- **Live-Demo:** [https://vrptw-solver.vercel.app/](https://vrptw-solver.vercel.app/)
+- **Backend 0.6.3 version:** [https://vrptw-api.arnobmahmud.com/](https://vrptw-api.arnobmahmud.com/)
+- **Backend 0.13+ version:** [https://vrptw-ils.arnobmahmud.com/](https://vrptw-ils.arnobmahmud.com/)
+
 **For full project overview, how to run, environment variables, and API endpoint reference**, see the **[root README](../README.md)** and **[RUN.md](../RUN.md)**. This document focuses on **algorithm details, parameter tuning, code examples, and reusability** for teaching and extension.
 
 ---

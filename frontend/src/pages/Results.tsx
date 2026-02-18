@@ -32,7 +32,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 type ResearchPaper = {
   number: number;
@@ -1207,12 +1207,12 @@ function ExperimentItem({
               }
             }}
           >
-            <DialogContent className="h-[90vh] max-h-[90vh] w-[90vw] max-w-[90vw] p-4">
+            <DialogContent className="h-[90vh] max-h-[90vh] w-[90vw] max-w-[90vw] p-4" aria-describedby={undefined}>
               <div className="flex h-full flex-col">
                 <div className="mb-3 flex items-center justify-between pr-8">
-                  <p className="truncate text-sm font-medium text-slate-700">
+                  <DialogTitle className="truncate text-sm font-medium text-slate-700">
                     {selectedImage ?? "Plot preview"}
-                  </p>
+                  </DialogTitle>
                   {selectedImage && (
                     <button
                       type="button"
