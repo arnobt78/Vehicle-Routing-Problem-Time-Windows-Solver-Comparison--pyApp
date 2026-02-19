@@ -1,0 +1,24 @@
+# VRPTW ILS-only backend (pyvrp 0.13+). No RAG. Use this in Coolify for vrptw-ils.
+# Coolify vrptw-ils: Base Directory = /backend, Dockerfile Location = ./Dockerfile.ils
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install system deps: gcc/g++ for building pyvrp from source (C++ extension)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements (ILS only; no requirements-rag.txt needed for this image)
+COPY requirements.txt requirements-ils.txt ./
+
+# ILS: install only requirements-ils.txt (pyvrp 0.13+), no RAG
+RUN pip install --no-cache-dir -r requirements-ils.txt
+
+COPY . .
+
+EXPOSE 3000
+ENV BACKEND_ALGOS=ils
+
+CMD ["python", "run_server.py"]
