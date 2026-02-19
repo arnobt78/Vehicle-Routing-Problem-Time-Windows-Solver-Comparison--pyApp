@@ -1,8 +1,10 @@
 import asyncio
 import json
+import time
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from app.api.models.request_models import SolveRequest
 from app.core.config import SUPPORTED_ALGOS
@@ -10,6 +12,28 @@ from app.services.job_store import append_log, create_job, get_job, set_stopped
 from app.services.solver_executor import run_solve
 
 router = APIRouter(prefix="/solve", tags=["solve"])
+
+
+class CompareStatusRequest(BaseModel):
+    job_ids: dict[str, str]  # algo -> job_id
+
+
+def _job_progress(job: dict) -> dict:
+    """Build progress from elapsed / runtime_limit (same idea as Solver page). Cap at 99.9% until completed."""
+    out = {}
+    started_at = job.get("started_at")
+    runtime_limit = job.get("runtime_limit")
+    if started_at is not None:
+        elapsed = max(0, time.time() - started_at)
+        out["elapsed_sec"] = round(elapsed, 1)
+    if runtime_limit is not None and runtime_limit > 0:
+        out["runtime_limit"] = runtime_limit
+        if "elapsed_sec" in out:
+            pct = min(100, round(100 * out["elapsed_sec"] / runtime_limit, 1))
+            if job.get("status") == "running" and pct >= 100:
+                pct = 99.9
+            out["progress_pct"] = pct
+    return out
 
 
 def _get_compare_params_for_algo(params: dict | None, algo: str) -> dict | None:
@@ -39,6 +63,33 @@ def post_compare(body: SolveRequest):
         run_solve(job_id, body.dataset, algo, body.runtime, params)
         job_ids[algo] = job_id
     return {"job_ids": job_ids}
+
+
+@router.post("/compare-status")
+def post_compare_status(body: CompareStatusRequest):
+    """Return status and per-job progress for all given job_ids (one poll for compare page)."""
+    jobs: dict[str, dict] = {}
+    for algo, job_id in body.job_ids.items():
+        try:
+            job = get_job(job_id)
+            if not job:
+                continue
+            status = job.get("status", "pending")
+            payload: dict = {"status": status}
+            if status == "completed":
+                payload["result"] = job.get("result")
+            elif status == "failed":
+                payload["error"] = job.get("error")
+            elif status == "stopped":
+                payload["error"] = job.get("error")
+            else:
+                payload["result"] = None
+                payload.update(_job_progress(job))
+            jobs[algo] = payload
+        except Exception:
+            # Don't fail entire request if one job fails (e.g. missing key, race)
+            jobs[algo] = {"status": "running", "result": None}
+    return {"jobs": jobs}
 
 
 @router.post("/{algo}")

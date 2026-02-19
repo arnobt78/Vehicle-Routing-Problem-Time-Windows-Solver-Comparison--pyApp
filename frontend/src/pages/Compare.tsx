@@ -4,6 +4,7 @@ import { useDatasets } from "@/hooks/useDatasets";
 import {
   getDataset,
   getResult,
+  getCompareStatus,
   postCompare,
   postStopSolve,
   postSolve,
@@ -33,7 +34,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type CompareRow = {
   algo: string;
@@ -42,6 +48,12 @@ type CompareRow = {
   cost: number | null;
   runtime: number | null;
   gap: number | null;
+  /** Set when status is running/pending; used for per-row progress bar. */
+  progress?: {
+    elapsed_sec: number;
+    runtime_limit: number;
+    progress_pct: number;
+  };
 };
 
 type CompareMode = "default" | "tuned";
@@ -473,6 +485,8 @@ export function Compare() {
     if (running) hasAnimatedRef.current = false;
   }, [running, rows.length]);
 
+  const POLL_INTERVAL_MS = 5000;
+
   const fetchResults = async (
     jobIds: Record<string, string>,
     bks: number | null,
@@ -488,36 +502,98 @@ export function Compare() {
     }));
     setRows(results);
 
-    const poll = async (idx: number) => {
-      const algo = algos[idx];
-      const jobId = jobIds[algo];
-      let r = await getResult(jobId, algo);
-      while (r.status === "running" || r.status === "pending") {
-        await new Promise((x) => setTimeout(x, 1000));
-        r = await getResult(jobId, algo);
-      }
+    const applyJobToRow = (
+      row: CompareRow,
+      r: {
+        status: string;
+        result?: { routes: number[][]; cost: number; runtime: number } | null;
+        elapsed_sec?: number;
+        runtime_limit?: number;
+        progress_pct?: number;
+      },
+    ): CompareRow => {
       const res = r.result;
       const gap =
         bks != null && res?.cost != null
           ? Math.round(((100 * (res.cost - bks)) / bks) * 100) / 100
           : null;
-      setRows((prev) =>
-        prev.map((row, i) =>
-          i === idx
-            ? {
-                ...row,
-                status: r.status,
-                routes: res?.routes?.length ?? 0,
-                cost: res?.cost ?? null,
-                runtime: res?.runtime ?? null,
-                gap,
-              }
-            : row,
-        ),
-      );
+      const progress =
+        (r.status === "running" || r.status === "pending") &&
+        r.elapsed_sec != null &&
+        r.runtime_limit != null &&
+        r.progress_pct != null
+          ? {
+              elapsed_sec: r.elapsed_sec,
+              runtime_limit: r.runtime_limit,
+              progress_pct: r.progress_pct,
+            }
+          : undefined;
+      return {
+        ...row,
+        status: r.status,
+        routes: res?.routes?.length ?? 0,
+        cost: res?.cost ?? null,
+        runtime: res?.runtime ?? null,
+        gap,
+        progress,
+      };
     };
 
-    await Promise.all(algos.map((_, i) => poll(i)));
+    let lastIlsJob: { status: string; result?: { routes: number[][]; cost: number; runtime: number } | null; elapsed_sec?: number; runtime_limit?: number; progress_pct?: number } | null = null;
+
+    while (true) {
+      if (stopRequestedRef.current) break;
+
+      let jobs: Record<
+        string,
+        {
+          status: string;
+          result?: { routes: number[][]; cost: number; runtime: number } | null;
+          elapsed_sec?: number;
+          runtime_limit?: number;
+          progress_pct?: number;
+        }
+      > = {};
+      try {
+        jobs = await getCompareStatus(jobIds);
+      } catch {
+        await new Promise((x) => setTimeout(x, POLL_INTERVAL_MS));
+        continue;
+      }
+
+      const ilsTerminal = lastIlsJob != null && ["completed", "failed", "stopped"].includes(lastIlsJob.status);
+      if (apiIls != null && jobIds.ils != null) {
+        if (ilsTerminal && lastIlsJob != null) {
+          jobs = { ...jobs, ils: lastIlsJob };
+        } else {
+          try {
+            const ilsRes = await getResult(jobIds.ils, "ils");
+            lastIlsJob = ilsRes;
+            jobs = { ...jobs, ils: ilsRes };
+          } catch {
+            if (lastIlsJob != null) jobs = { ...jobs, ils: lastIlsJob };
+          }
+        }
+      }
+
+      setRows((prev) =>
+        prev.map((row) => {
+          const j = jobs[row.algo];
+          if (j == null) return row;
+          return applyJobToRow(row, j);
+        }),
+      );
+
+      // Only consider run complete when we have a terminal status for every algo we started
+      const allTerminal = algos.every(
+        (algo) =>
+          jobs[algo] != null &&
+          ["completed", "failed", "stopped"].includes(jobs[algo]!.status),
+      );
+      if (allTerminal) break;
+
+      await new Promise((x) => setTimeout(x, POLL_INTERVAL_MS));
+    }
     setRunning(false);
   };
 
@@ -689,13 +765,14 @@ export function Compare() {
             <p className="text-base text-slate-500">
               Benchmark Hybrid Genetic Search, Guided Local Search, Ant Colony
               Optimization, Simulated Annealing, and Iterated Local Search run
-              on a single dataset simultaneously to compare performance. ACO and
-              SA can take longer on larger instances because they lack a fixed
-              runtime parameter, and ILS runtime may vary when a separate
-              backend is used. Choose a dataset and click "Run Algorithms" to
-              start. When it finishes, review the results table and use "Explain
-              results" for AI insights. For quick checks, try smaller instances
-              like C101 or R101.
+              on a single dataset simultaneously to compare performance (minimum
+              runtime at least 10–20 minutes or more). ACO and SA can take
+              longer on larger instances because they lack a fixed runtime
+              parameter, and ILS runtime may vary when a separate backend is
+              used. Choose a dataset and click "Run Algorithms" to start. When
+              it finishes, review the results table and use "Explain results"
+              for AI insights. For quick checks, try smaller instances (100
+              customers): C101, R101, or RC101.
             </p>
           </div>
         </div>
@@ -1264,12 +1341,18 @@ export function Compare() {
         </div>
 
         <Dialog open={showStopDialog} onOpenChange={setShowStopDialog}>
-          <DialogContent className="max-w-md p-0" aria-describedby="stop-compare-dialog-description">
+          <DialogContent
+            className="max-w-md p-0"
+            aria-describedby="stop-compare-dialog-description"
+          >
             <div className="border-b border-slate-200 px-5 py-4">
               <DialogTitle className="text-slate-900">
                 Stop running algorithms?
               </DialogTitle>
-              <DialogDescription id="stop-compare-dialog-description" className="mt-1 text-base">
+              <DialogDescription
+                id="stop-compare-dialog-description"
+                className="mt-1 text-base"
+              >
                 This will mark unfinished algorithms as stopped. Completed
                 results stay available.
               </DialogDescription>
@@ -1320,7 +1403,9 @@ export function Compare() {
                 >
                   <div
                     className="progress-bar-fill"
-                    style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+                    style={{
+                      width: `${Math.min(100, Math.max(0, progress))}%`,
+                    }}
                   />
                 </div>
                 <span className="text-sm font-mono tabular-nums">
@@ -1404,7 +1489,7 @@ export function Compare() {
                     <th className="px-4 py-3 text-left font-semibold text-slate-700">
                       Metaheuristic Algorithm
                     </th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-700">
+                    <th className="min-w-[220px] px-4 py-3 text-left font-semibold text-slate-700">
                       Algorithm Status
                     </th>
                     <th className="px-4 py-3 text-left font-semibold text-slate-700">
@@ -1436,13 +1521,53 @@ export function Compare() {
                       <td className="px-4 py-3 font-medium text-slate-900">
                         {getAlgoDisplayName(row.algo)}
                       </td>
-                      <td
-                        className={cn(
-                          "px-4 py-3 font-medium",
-                          getStatusClass(row.status),
-                        )}
-                      >
-                        {row.status}
+                      <td className="min-w-[220px] px-4 py-3">
+                        <div className="flex flex-col gap-1.5">
+                          <span
+                            className={cn(
+                              "inline-flex items-center font-medium",
+                              getStatusClass(row.status),
+                            )}
+                          >
+                            {row.status === "running" ||
+                            row.status === "pending" ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+                                Running
+                              </span>
+                            ) : (
+                              row.status.charAt(0).toUpperCase() +
+                                row.status.slice(1)
+                            )}
+                          </span>
+                          {(row.status === "running" ||
+                            row.status === "pending") &&
+                            row.progress != null && (
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="progress-bar-track w-28 shrink-0"
+                                  role="progressbar"
+                                  aria-valuenow={row.progress.progress_pct}
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                  aria-label={`${row.algo} progress`}
+                                >
+                                  <div
+                                    className="progress-bar-fill"
+                                    style={{
+                                      width: `${Math.min(
+                                        100,
+                                        Math.max(0, row.progress.progress_pct),
+                                      )}%`,
+                                    }}
+                                  />
+                                </div>
+                                <span className="w-12 shrink-0 text-right text-xs font-mono tabular-nums text-slate-500">
+                                  {row.progress.progress_pct}%
+                                </span>
+                              </div>
+                            )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-slate-600">{row.routes}</td>
                       <td className="px-4 py-3 text-slate-600">

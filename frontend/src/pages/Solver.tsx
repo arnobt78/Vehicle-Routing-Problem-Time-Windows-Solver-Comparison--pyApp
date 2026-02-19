@@ -23,7 +23,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const INPUT_STYLE =
   "w-full min-w-[200px] rounded-lg border border-slate-300 bg-white px-2 py-2.5 text-base text-slate-900 shadow-lg";
@@ -118,7 +123,7 @@ export function Solver() {
   const [showStopDialog, setShowStopDialog] = useState(false);
   const hasHydratedSelectionRef = useRef(false);
   const { elapsed, formatted } = useStopwatch(running);
-  const { logs, status, result, error, clear } = useSolveStream(
+  const { logs, status, result, error, connectionLost, clear } = useSolveStream(
     jobId,
     streamAlgo,
     running && !!jobId,
@@ -251,6 +256,16 @@ export function Solver() {
     !running && status !== "done" && !!cachedSnapshot?.result;
   const displayedLogs =
     showingCachedResult && cachedSnapshot ? (cachedSnapshot.logs ?? []) : logs;
+  const resultDataset =
+    result && status === "done"
+      ? selectedDataset
+      : (cachedSnapshot?.dataset ?? null);
+  const { data: resultDatasetInfo } = useQuery({
+    queryKey: ["dataset", resultDataset],
+    queryFn: () => getDataset(resultDataset!),
+    enabled:
+      !!resultDataset && (!!(result && status === "done") || !!cachedSnapshot),
+  });
 
   const handleRun = async () => {
     if (!selectedDataset || !selectedAlgo) return;
@@ -313,12 +328,14 @@ export function Solver() {
               Single-Algorithm Benchmark Configuration
             </h2>
             <p className="text-base text-slate-500">
-              Run one metaheuristic on a selected Solomon instance and review
-              the solution details and route plot. ACO and SA can take longer on
-              larger instances because they lack a fixed runtime parameter, and
-              ILS runtime may vary when a separate backend is used. Choose a
-              dataset and algorithm, adjust parameters if needed, and click "Run
-              Algorithm" to start.
+              Run a single metaheuristic on a Solomon instance and view the
+              solution details and route plot. HGS, GLS, and ILS use fixed
+              runtime limits. ACO and SA use configurable runtimes and often
+              take at least 10–20 minutes or more on larger instances to improve
+              solution quality—plan for this when choosing an algorithm. ILS
+              runtime may differ when a separate backend is configured. Select a
+              dataset and algorithm, adjust parameters if needed, and click
+              &quot;Run Algorithm&quot; to start.
             </p>
           </div>
         </div>
@@ -455,7 +472,10 @@ export function Solver() {
         </div>
 
         <Dialog open={showStopDialog} onOpenChange={setShowStopDialog}>
-          <DialogContent className="max-w-md p-0" aria-describedby="stop-dialog-description">
+          <DialogContent
+            className="max-w-md p-0"
+            aria-describedby="stop-dialog-description"
+          >
             <div className="border-b border-slate-200 px-5 py-4">
               <DialogTitle className="text-slate-900">
                 Stop running algorithm?
@@ -500,6 +520,13 @@ export function Solver() {
       {/* Running indicator */}
       {running && (
         <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sky-800">
+          {connectionLost && (
+            <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Connection lost (e.g. network change). The run is still in
+              progress on the server. This page will update automatically when
+              it finishes—no need to refresh.
+            </div>
+          )}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <RotateCw className="h-6 w-6 shrink-0 animate-spin" />
@@ -520,7 +547,9 @@ export function Solver() {
                   ) : (
                     <div
                       className="progress-bar-fill"
-                      style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+                      style={{
+                        width: `${Math.min(100, Math.max(0, progress))}%`,
+                      }}
                     />
                   )}
                 </div>
@@ -620,35 +649,72 @@ export function Solver() {
                       />
                     </div>
                     <div className="space-y-1 text-sm text-slate-600">
-                      <p>
-                        <span className="font-medium text-slate-700">
-                          Cost:
-                        </span>{" "}
-                        {activeResult.cost}
-                      </p>
-                      <p>
-                        <span className="font-medium text-slate-700">
-                          Runtime:
-                        </span>{" "}
-                        {activeResult.runtime}s
-                      </p>
-                      <p>
-                        <span className="font-medium text-slate-700">
-                          Routes:
-                        </span>{" "}
-                        {activeResult.routes.length}
-                      </p>
-                      <div className="mt-4 space-y-1 font-mono text-sm">
+                      <div className="mb-4">
+                        <p>
+                          <span className="font-medium text-slate-700">
+                            Cost:
+                          </span>{" "}
+                          {activeResult.cost}
+                        </p>
+                        <p>
+                          <span className="font-medium text-slate-700">
+                            Runtime:
+                          </span>{" "}
+                          {activeResult.runtime}s
+                        </p>
+                        <p>
+                          <span className="font-medium text-slate-700">
+                            Routes:
+                          </span>{" "}
+                          {activeResult.routes.length}
+                        </p>
+                      </div>
+                      <div className="space-y-1 font-mono text-sm">
                         {activeResult.routes.map((r, i) => (
                           <p key={i}>
                             Route #{i + 1}: {r.join(" ")}
                           </p>
                         ))}
                       </div>
+
+                      {resultDatasetInfo?.has_bks &&
+                        resultDatasetInfo.bks_cost != null && (
+                          <div className="mt-4 rounded-md border border-slate-200 bg-slate-50/80 p-3 text-sm">
+                            <p className="mb-1.5 font-medium text-slate-700">
+                              Comparison on {activeDataset ?? ""}.txt
+                            </p>
+                            <p className="text-slate-600">
+                              <span className="font-medium text-slate-700">
+                                {getAlgoDisplayName(activeAlgo ?? "")}
+                              </span>
+                              : Cost {activeResult.cost},{" "}
+                              {activeResult.routes.length} routes
+                            </p>
+                            <p className="text-slate-600">
+                              <span className="font-medium text-slate-700">
+                                BKS
+                              </span>{" "}
+                              ({activeDataset ?? ""}.txt): Cost{" "}
+                              {resultDatasetInfo.bks_cost},{" "}
+                              {resultDatasetInfo.bks_routes?.length ?? 0} routes
+                            </p>
+                            <p className="mt-1 font-medium text-slate-700">
+                              Gap:{" "}
+                              {(
+                                ((activeResult.cost -
+                                  resultDatasetInfo.bks_cost) /
+                                  resultDatasetInfo.bks_cost) *
+                                100
+                              ).toFixed(2)}
+                              %
+                            </p>
+                          </div>
+                        )}
                     </div>
                   </div>
                   <div className="result-card">
                     <RoutePlotWithControls
+                      key={`${activeJobId ?? ""}-${activeAlgo ?? ""}-${activePlotDataUrl ? "cached" : "live"}`}
                       jobId={activeJobId}
                       algo={activeAlgo ?? undefined}
                       dataset={activeDataset ?? undefined}

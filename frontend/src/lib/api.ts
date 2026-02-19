@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 /** When set, ILS requests (solve/stream/results/plot) use this backend (Option A: two backends). */
 const ILS_API_URL = import.meta.env.VITE_ILS_API_URL;
 
@@ -10,7 +10,7 @@ export const api = axios.create({
 });
 
 /** Base URL for health/status (no /api prefix for timing). */
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 /** Health check for API Status page. Returns status, algorithms, and response time in ms. */
 export async function getHealthStatus(): Promise<{
@@ -149,7 +149,7 @@ export async function getDatasets() {
 
 /** Base URL for dataset API (for download links). */
 export function getDatasetApiBase(): string {
-  return `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/datasets`;
+  return `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/datasets`;
 }
 
 export function getInstanceDownloadUrl(name: string): string {
@@ -230,6 +230,23 @@ export async function postCompare(
   return data;
 }
 
+export type CompareJobStatus = {
+  status: string;
+  result?: { routes: number[][]; cost: number; runtime: number } | null;
+  error?: string;
+  elapsed_sec?: number;
+  runtime_limit?: number;
+  progress_pct?: number;
+};
+
+/** Single poll for compare page: returns status and per-job progress for all job_ids. */
+export async function getCompareStatus(jobIds: Record<string, string>) {
+  const { data } = await api.post<{
+    jobs: Record<string, CompareJobStatus>;
+  }>("/solve/compare-status", { job_ids: jobIds });
+  return data.jobs;
+}
+
 export async function getResult(jobId: string, algo?: string) {
   const client = algo === "ils" && apiIls != null ? apiIls : api;
   const { data } = await client.get<{
@@ -291,7 +308,7 @@ export function getTestResultImageUrl(
   expId: string,
   filename: string,
 ): string {
-  const base = import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const base = import.meta.env.VITE_API_URL || "http://localhost:8000";
   const s = encodeURIComponent(setId);
   const e = encodeURIComponent(expId);
   const f = encodeURIComponent(filename);

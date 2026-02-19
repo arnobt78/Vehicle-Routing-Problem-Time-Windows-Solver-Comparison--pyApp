@@ -10,7 +10,8 @@ from app.log_config import get_log_config
 
 
 def main() -> None:
-    port = int(os.getenv("PORT", "5000"))
+    # Local: default 8000 (avoids macOS port 5000). Production: set PORT=3000 in Coolify (e.g. 5004:3000).
+    port = int(os.getenv("PORT", "8000"))
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",

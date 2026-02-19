@@ -1,3 +1,4 @@
+import time
 import uuid
 from threading import Lock
 
@@ -15,6 +16,8 @@ def create_job(dataset: str, algo: str) -> str:
             "logs": [],
             "result": None,
             "error": None,
+            "started_at": None,
+            "runtime_limit": None,
         }
     return job_id
 
@@ -43,10 +46,13 @@ def set_error(job_id: str, error: str) -> None:
             _jobs[job_id]["error"] = error
 
 
-def set_running(job_id: str) -> None:
+def set_running(job_id: str, runtime_limit_sec: int | None = None) -> None:
     with _lock:
         if job_id in _jobs:
             _jobs[job_id]["status"] = "running"
+            _jobs[job_id]["started_at"] = time.time()
+            if runtime_limit_sec is not None:
+                _jobs[job_id]["runtime_limit"] = runtime_limit_sec
 
 
 def set_stopped(job_id: str, reason: str | None = None) -> None:

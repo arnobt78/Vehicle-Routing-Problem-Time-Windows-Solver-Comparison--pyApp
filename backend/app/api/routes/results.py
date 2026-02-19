@@ -1,4 +1,5 @@
 import io
+import time
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
@@ -14,6 +15,24 @@ import matplotlib.pyplot as plt
 router = APIRouter(prefix="/results", tags=["results"])
 
 
+def _job_progress(job: dict) -> dict:
+    """Build progress from elapsed / runtime_limit (same as Solver). Cap at 99.9% until completed."""
+    out = {}
+    started_at = job.get("started_at")
+    runtime_limit = job.get("runtime_limit")
+    if started_at is not None:
+        elapsed = max(0, time.time() - started_at)
+        out["elapsed_sec"] = round(elapsed, 1)
+    if runtime_limit is not None and runtime_limit > 0:
+        out["runtime_limit"] = runtime_limit
+        if "elapsed_sec" in out:
+            pct = min(100, round(100 * out["elapsed_sec"] / runtime_limit, 1))
+            if job.get("status") == "running" and pct >= 100:
+                pct = 99.9
+            out["progress_pct"] = pct
+    return out
+
+
 @router.get("/{job_id}")
 def get_results(job_id: str):
     job = get_job(job_id)
@@ -24,7 +43,9 @@ def get_results(job_id: str):
     if job["status"] == "stopped":
         return {"status": "stopped", "error": job.get("error")}
     if job["status"] != "completed":
-        return {"status": job["status"], "result": None}
+        resp = {"status": job["status"], "result": None}
+        resp.update(_job_progress(job))
+        return resp
     return {"status": "completed", "result": job["result"]}
 
 

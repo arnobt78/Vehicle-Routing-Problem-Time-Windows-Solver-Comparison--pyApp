@@ -45,7 +45,21 @@ def _run_algo(job_id: str, algo: str, input_path: str, runtime: int, params: dic
         def flush(self):
             self.inner.flush()
 
-    set_running(job_id)
+    p = {**(DEFAULT_PARAMS.get(algo, {})), **(params or {})}
+    # Progress bar window only (does not change actual algo runtime)
+    runtime_limit_sec: int | None
+    if algo == "aco":
+        # ACO often runs 10+ min for better results; show bar over 12 min
+        runtime_limit_sec = 800  # 12+ min
+    elif algo == "sa":
+        # SA finishes last, typically 15+ min; show bar over ~17 min
+        runtime_limit_sec = 1000
+    elif algo == "gls":
+        # GLS typically completes around 8 min; show bar over 8 min
+        runtime_limit_sec = 500  # 8+ min
+    else:
+        runtime_limit_sec = p.get("runtime", runtime)
+    set_running(job_id, runtime_limit_sec)
     append_log(job_id, f"Starting {algo.upper()}...")
     old_stdout = sys.stdout
     old_stderr = sys.stderr
@@ -59,7 +73,6 @@ def _run_algo(job_id: str, algo: str, input_path: str, runtime: int, params: dic
     progress_thread.start()
     try:
         start = time.time()
-        p = {**(DEFAULT_PARAMS.get(algo, {})), **(params or {})}
         if algo == "ils":
             try:
                 from ils.solve import solve_with_ils

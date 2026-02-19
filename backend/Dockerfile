@@ -24,8 +24,8 @@ RUN pip install --no-cache-dir -r requirements-rag.txt
 
 COPY . .
 
-# Expose port (Coolify/Traefik will map to container port 5000)
-EXPOSE 5000
+# Expose port (Coolify: set PORT=3000, map e.g. 5004:3000)
+EXPOSE 3000
 
 ARG BACKEND_ALGOS=hgs,gls,aco,sa
 ENV BACKEND_ALGOS=${BACKEND_ALGOS}

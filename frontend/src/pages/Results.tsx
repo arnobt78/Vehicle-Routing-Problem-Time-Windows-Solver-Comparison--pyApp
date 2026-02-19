@@ -138,7 +138,7 @@ function downloadJsonFile(fileName: string, data: unknown) {
 }
 
 function getTestResultContentUrl(setId: string, expId: string): string {
-  const base = import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const base = import.meta.env.VITE_API_URL || "http://localhost:8000";
   const s = encodeURIComponent(setId);
   const e = encodeURIComponent(expId);
   return `${base}/api/test-results/${s}/${e}/content`;
@@ -153,7 +153,7 @@ function getTestResultImageDownloadUrl(
 }
 
 function getTestResultsZipUrl(): string {
-  const base = import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const base = import.meta.env.VITE_API_URL || "http://localhost:8000";
   return (
     import.meta.env.VITE_TEST_RESULTS_ZIP_URL || `${base}/test_results.zip`
   );

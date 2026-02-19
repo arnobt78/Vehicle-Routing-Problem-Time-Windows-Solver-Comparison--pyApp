@@ -1108,8 +1108,8 @@ SECRET_KEY=your-secret-key
 DATABASE_URL=sqlite:///results.db
 
 # Frontend Configuration
-REACT_APP_API_URL=http://localhost:5000/api
-REACT_APP_WS_URL=ws://localhost:5000/ws
+REACT_APP_API_URL=http://localhost:8000/api
+REACT_APP_WS_URL=ws://localhost:8000/ws
 
 # Algorithm Defaults
 DEFAULT_RUNTIME=120

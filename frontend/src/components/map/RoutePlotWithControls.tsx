@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Copy, MoreVertical, Download, Maximize2 } from "lucide-react";
+import { Copy, MoreVertical, Download, Maximize2, Loader2 } from "lucide-react";
 import { getPlotUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { getAlgoDisplayName } from "@/constants/algorithms";
 import { CopyButton } from "@/components/common/CopyButton";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -29,10 +30,12 @@ export function RoutePlotWithControls({
 }: RoutePlotWithControlsProps) {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [failedPlotUrl, setFailedPlotUrl] = useState<string | null>(null);
+  const [plotImageLoaded, setPlotImageLoaded] = useState(false);
 
   const remotePlotUrl = jobId ? getPlotUrl(jobId, algo) : null;
   const plotUrl = plotDataUrl ?? remotePlotUrl;
   const imageLoadFailed = !!plotUrl && failedPlotUrl === plotUrl;
+  // Loading state resets when parent passes a new key (e.g. when result changes)
 
   const handleDownloadPng = async () => {
     if (!plotUrl) return;
@@ -112,25 +115,41 @@ export function RoutePlotWithControls({
       </div>
 
       <div className="w-full rounded-lg border border-slate-200 bg-slate-50 p-4">
-        <div className="h-[min(52vh,460px)] min-h-[260px] w-full overflow-hidden">
+        <div className="relative h-[min(52vh,460px)] min-h-[260px] w-full overflow-hidden">
           {imageLoadFailed ? (
             <div className="flex h-full w-full items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white px-4 text-center text-sm text-slate-600">
               Route plot is unavailable for this cached run. Please run the
               solver again to regenerate the visualization.
             </div>
           ) : (
-            <img
-              src={plotUrl}
-              alt="Route plot"
-              className="h-full w-full object-contain"
-              onError={(event) => {
-                if (plotDataUrl && remotePlotUrl) {
-                  event.currentTarget.src = remotePlotUrl;
-                  return;
-                }
-                setFailedPlotUrl(plotUrl);
-              }}
-            />
+            <>
+              {!plotImageLoaded && (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-lg bg-slate-50">
+                  <Loader2 className="h-10 w-10 animate-spin text-sky-600" />
+                  <p className="text-center text-sm font-medium text-slate-700">
+                    Generating calculated{" "}
+                    {getAlgoDisplayName(algo ?? "")} on {dataset ?? "instance"}{" "}
+                    plot...
+                  </p>
+                </div>
+              )}
+              <img
+                src={plotUrl}
+                alt="Route plot"
+                className={cn(
+                  "h-full w-full object-contain",
+                  !plotImageLoaded && "opacity-0",
+                )}
+                onLoad={() => setPlotImageLoaded(true)}
+                onError={(event) => {
+                  if (plotDataUrl && remotePlotUrl) {
+                    event.currentTarget.src = remotePlotUrl;
+                    return;
+                  }
+                  setFailedPlotUrl(plotUrl);
+                }}
+              />
+            </>
           )}
         </div>
       </div>
