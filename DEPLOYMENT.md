@@ -114,7 +114,7 @@ Before first push, ensure no secrets are committed: `.env` and `.env.*` (except 
 - **One Dockerfile** in `backend/Dockerfile` is enough. It uses **build arguments** to produce either the main backend image (pyvrp 0.6.3) or the ILS backend image (pyvrp 0.13+).
 - **Two Coolify backend applications** (two separate “sites”/services):
   - **App 1 – Main API (HGS, ACO, GLS, SA):** Build from repo path `backend/`, Dockerfile `Dockerfile`. Build args: `REQUIREMENTS_FILE=requirements.txt`, `BACKEND_ALGOS=hgs,gls,aco,sa`. Container port **5000**. Env: `BACKEND_ALGOS=hgs,gls,aco,sa`, `DATASET_PATH=dataset`, `CORS_ORIGINS=https://your-app.vercel.app`, plus any API keys (Gemini, etc.).
-  - **App 2 – ILS API:** Same repo, same `backend/` folder, same `Dockerfile`. Build args: `REQUIREMENTS_FILE=requirements-ils.txt`, `BACKEND_ALGOS=ils`. Container port **5000**. Env: `BACKEND_ALGOS=ils`, `DATASET_PATH=dataset`, `CORS_ORIGINS=https://your-app.vercel.app`.
+  - **App 2 – ILS API:** Same repo, same `backend/` folder, same `Dockerfile`. Build args: `REQUIREMENTS_FILE=requirements-ils.txt`, `BACKEND_ALGOS=ils`, `INSTALL_RAG=0` (skip RAG to save image size; main API serves all AI). Container port **5000**. Env: `BACKEND_ALGOS=ils`, `DATASET_PATH=dataset`, `CORS_ORIGINS=https://your-app.vercel.app`.
 
 So: **one Dockerfile**, **two Coolify apps** with different build args and env. Each app gets its own subdomain and Let’s Encrypt certificate.
 

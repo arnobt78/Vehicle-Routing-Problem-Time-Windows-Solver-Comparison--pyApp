@@ -1,7 +1,7 @@
 # VRPTW Solver backend — one image for main (HGS/ACO/GLS/SA) or ILS.
 # Build with different args to get either pyvrp 0.6.3 (main) or pyvrp 0.13+ (ILS).
-# Coolify: App 1 build args REQUIREMENTS_FILE=requirements.txt BACKEND_ALGOS=hgs,gls,aco,sa
-#         App 2 build args REQUIREMENTS_FILE=requirements-ils.txt BACKEND_ALGOS=ils
+# Coolify: App 1 (vrptw-api) build args REQUIREMENTS_FILE=requirements.txt BACKEND_ALGOS=hgs,gls,aco,sa (INSTALL_RAG=1 default)
+#         App 2 (vrptw-ils) build args REQUIREMENTS_FILE=requirements-ils.txt BACKEND_ALGOS=ils INSTALL_RAG=0
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -19,8 +19,9 @@ COPY requirements.txt requirements-ils.txt requirements-rag.txt ./
 ARG REQUIREMENTS_FILE=requirements.txt
 RUN pip install --no-cache-dir -r ${REQUIREMENTS_FILE}
 
-# RAG (AI assistant) on both vrptw-api and vrptw-ils
-RUN pip install --no-cache-dir -r requirements-rag.txt
+# RAG (AI assistant) only on main API; skip for ILS to save image size and memory (frontend uses main API for all AI).
+ARG INSTALL_RAG=1
+RUN if [ "$INSTALL_RAG" = "1" ]; then pip install --no-cache-dir -r requirements-rag.txt; fi
 
 COPY . .
 
