@@ -88,7 +88,7 @@ VITE_ILS_API_URL=http://localhost:8001
 3. **Terminal 3 – Frontend**  
    Set `VITE_ILS_API_URL=http://localhost:8001` in `frontend/.env`, then `npm run dev`.
 
-On the **Solver** page, choosing ILS will use the ILS backend; choosing HGS/ACO/GLS/SA will use the main backend. **Compare** runs all algorithms: it calls the main backend’s `/solve/compare` (which returns job_ids for the algos it supports), then starts an ILS job on the ILS backend if `VITE_ILS_API_URL` is set and merges that result into the table.
+On the **Solver** page, choosing ILS will use the ILS backend; choosing HGS/ACO/GLS/SA will use the main backend. **Compare** runs all 5 algorithms in parallel: it calls the main backend’s `/solve/compare` (which starts HGS, GLS, ACO, SA), then starts an ILS job on the ILS backend when `VITE_ILS_API_URL` is set, then polls each job's status independently (`GET /results/{job_id}` per algo) and updates the table as each completes.
 
 ---
 

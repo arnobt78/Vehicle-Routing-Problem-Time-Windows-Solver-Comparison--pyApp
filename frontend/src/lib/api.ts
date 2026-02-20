@@ -247,6 +247,16 @@ export async function getCompareStatus(jobIds: Record<string, string>) {
   return data.jobs;
 }
 
+/** Job IDs for the main API only (exclude ILS when using separate ILS backend). */
+export function getMainApiJobIds(
+  jobIds: Record<string, string>,
+): Record<string, string> {
+  if (!hasIlsBackend || jobIds.ils == null) return jobIds;
+  return Object.fromEntries(
+    Object.entries(jobIds).filter(([key]) => key !== "ils"),
+  );
+}
+
 export async function getResult(jobId: string, algo?: string) {
   const client = algo === "ils" && apiIls != null ? apiIls : api;
   const { data } = await client.get<{

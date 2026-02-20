@@ -19,6 +19,7 @@ def sa_algorithm(
     stop_criterion=lambda t: t <= 0.01,
     logger=None,
     log_every_seconds=2.0,
+    max_runtime_sec=None,
 ):
     curr_solution = incumb_solution = deepcopy(instance)
     # print("Inside sa: ", instance.get_total_distance_and_vehicles())
@@ -38,6 +39,8 @@ def sa_algorithm(
     incumb_vhcls_o = objective_function(incumb_vhcls, incumb_dist)
 
     while not stop_criterion(temp):
+        if max_runtime_sec is not None and (time.time() - start) >= max_runtime_sec:
+            break
         iter_count += 1
         # print(temp, incumb_vhcls, incumb_dist)
         neighbour = deepcopy(curr_solution)

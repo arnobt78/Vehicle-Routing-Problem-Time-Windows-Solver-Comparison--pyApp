@@ -215,7 +215,7 @@ Route #12: 95 33 32 30 28 26 27 29 31 80
 | Feature                    | Description                                                                                              |
 | -------------------------- | -------------------------------------------------------------------------------------------------------- |
 | **Run single algorithm**   | Pick dataset, algorithm (HGS/ILS/ACO/SA/GLS), runtime, optional params; stream logs and view route plot. |
-| **Compare all algorithms** | Run all supported algorithms on one dataset; see merged results and plots.                               |
+| **Compare all algorithms** | Run all supported algorithms on one dataset; see merged results and plots. Default runtimes: HGS, GLS, ILS 120s; ACO 10 min; SA 10 min. Each job is polled independently and the table updates as each completes. |
 | **Parameter tuning**       | Auto-tune algorithm parameters via AI (optional; requires `GOOGLE_GEMINI_API_KEY`).                      |
 | **Datasets & BKS**         | List Solomon instances, download instance/BKS files, view metadata.                                      |
 | **Experiment results**     | Browse pre-generated test result sets and experiment summaries (if `test_results` is available).         |

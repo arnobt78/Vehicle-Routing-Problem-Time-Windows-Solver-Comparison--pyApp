@@ -618,6 +618,8 @@ If `solver.ipynb` doesn't render on GitHub (shows "Unable to render code block")
 
 **Canonical list:** See **[root README — Environment Variables](../README.md#environment-variables)** for `backend/.env` variables (`DATASET_PATH`, `DEFAULT_RUNTIME`, `BACKEND_ALGOS`, `GOOGLE_GEMINI_API_KEY`, `RAG_*`). Copy `backend/.env.example` to `backend/.env` and fill as needed.
 
+- **DEFAULT_RUNTIME** (default `120`): Fallback runtime in seconds when a single solve is started without a runtime (e.g. from the Solver page or API). The **Compare** page uses its own defaults (HGS, GLS, ILS 120s; ACO 10 min; SA 10 min) and passes them in the request.
+
 The backend **does** use a `.env` file when present (via `python-dotenv` in `app.main`). Below is a recommended structure for local development and the web app.
 
 ### Recommended .env Structure (for local / web app)

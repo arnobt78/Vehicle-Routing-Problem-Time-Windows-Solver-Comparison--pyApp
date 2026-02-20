@@ -145,7 +145,7 @@ cd frontend
 npm run dev
 ```
 
-Open **http://localhost:5173**. Use **Run Solver** to run any of the 5 algorithms (ILS requests go to port 8001; the other 4 go to port 5000). Use **Run Benchmark** to compare all 5; the frontend will call the main backend for 4 algos and the ILS backend for ILS, then merge results.
+Open **http://localhost:5173**. Use **Run Solver** to run any of the 5 algorithms (ILS requests go to port 8001; the other 4 go to port 5000). Use **Compare** to run all 5 in parallel; the frontend starts 4 jobs on the main backend and 1 ILS job on the ILS backend, then polls each job's status independently and updates the table as each completes. Default runtimes: HGS, GLS, ILS 120s; ACO 10 min; SA 10 min.
 
 ---
 

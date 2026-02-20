@@ -52,8 +52,7 @@ def _run_algo(job_id: str, algo: str, input_path: str, runtime: int, params: dic
         # ACO often runs 10+ min for better results; show bar over 12 min
         runtime_limit_sec = 800  # 12+ min
     elif algo == "sa":
-        # SA finishes last, typically 15+ min; show bar over ~17 min
-        runtime_limit_sec = 1000
+        runtime_limit_sec = p.get("runtime", runtime)
     elif algo == "gls":
         # GLS typically completes around 8 min; show bar over 8 min
         runtime_limit_sec = 500  # 8+ min
@@ -107,6 +106,7 @@ def _run_algo(job_id: str, algo: str, input_path: str, runtime: int, params: dic
             from sa.simulated_annealing import sa_algorithm
             init_temp = p.get("init_temp", 700)
             cr = p.get("cooling_rate", 0.9999)
+            sa_runtime = p.get("runtime", runtime)
             instance = load_from_file(input_path)
             instance.find_initial_solution()
             results = sa_algorithm(
@@ -116,6 +116,7 @@ def _run_algo(job_id: str, algo: str, input_path: str, runtime: int, params: dic
                 stop_criterion=lambda t: t <= 0.01,
                 logger=print,
                 log_every_seconds=1.0,
+                max_runtime_sec=sa_runtime,
             )
             routes = results[2][0].get_solution()
             cost = round(results[2][0].get_total_distance(), 1)

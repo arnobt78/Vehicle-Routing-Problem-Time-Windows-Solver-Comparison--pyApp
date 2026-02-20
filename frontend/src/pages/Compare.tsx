@@ -4,7 +4,6 @@ import { useDatasets } from "@/hooks/useDatasets";
 import {
   getDataset,
   getResult,
-  getCompareStatus,
   postCompare,
   postStopSolve,
   postSolve,
@@ -48,12 +47,6 @@ type CompareRow = {
   cost: number | null;
   runtime: number | null;
   gap: number | null;
-  /** Set when status is running/pending; used for per-row progress bar. */
-  progress?: {
-    elapsed_sec: number;
-    runtime_limit: number;
-    progress_pct: number;
-  };
 };
 
 type CompareMode = "default" | "tuned";
@@ -88,7 +81,7 @@ const DEFAULT_BENCHMARK_TUNING: BenchmarkTuning = {
   acoBeta: 0.9,
   acoQ0: 0.9,
   acoRho: 0.1,
-  acoRuntimeMinutes: 5,
+  acoRuntimeMinutes: 10,
   saInitTemp: 700,
   saCoolingRate: 0.9999,
 };
@@ -485,7 +478,7 @@ export function Compare() {
     if (running) hasAnimatedRef.current = false;
   }, [running, rows.length]);
 
-  const POLL_INTERVAL_MS = 5000;
+  const POLL_INTERVAL_MS = 2500;
 
   const fetchResults = async (
     jobIds: Record<string, string>,
@@ -507,9 +500,7 @@ export function Compare() {
       r: {
         status: string;
         result?: { routes: number[][]; cost: number; runtime: number } | null;
-        elapsed_sec?: number;
-        runtime_limit?: number;
-        progress_pct?: number;
+        error?: string;
       },
     ): CompareRow => {
       const res = r.result;
@@ -517,17 +508,6 @@ export function Compare() {
         bks != null && res?.cost != null
           ? Math.round(((100 * (res.cost - bks)) / bks) * 100) / 100
           : null;
-      const progress =
-        (r.status === "running" || r.status === "pending") &&
-        r.elapsed_sec != null &&
-        r.runtime_limit != null &&
-        r.progress_pct != null
-          ? {
-              elapsed_sec: r.elapsed_sec,
-              runtime_limit: r.runtime_limit,
-              progress_pct: r.progress_pct,
-            }
-          : undefined;
       return {
         ...row,
         status: r.status,
@@ -535,43 +515,56 @@ export function Compare() {
         cost: res?.cost ?? null,
         runtime: res?.runtime ?? null,
         gap,
-        progress,
       };
     };
 
-    let lastIlsJob: { status: string; result?: { routes: number[][]; cost: number; runtime: number } | null; elapsed_sec?: number; runtime_limit?: number; progress_pct?: number } | null = null;
+    const runningAlgos = new Set(algos);
+    let ilsFetchFailCount = 0;
+    const ILS_FETCH_FAIL_THRESHOLD = 3;
 
-    while (true) {
-      if (stopRequestedRef.current) break;
+    while (runningAlgos.size > 0 && !stopRequestedRef.current) {
+      const jobPromises = Array.from(runningAlgos).map(async (algo) => {
+        const jobId = jobIds[algo];
+        try {
+          const data = await getResult(jobId, algo);
+          return { algo, data, error: null };
+        } catch (err) {
+          return { algo, data: null, error: err };
+        }
+      });
+      const outcomes = await Promise.all(jobPromises);
 
-      let jobs: Record<
+      const jobs: Record<
         string,
         {
           status: string;
           result?: { routes: number[][]; cost: number; runtime: number } | null;
-          elapsed_sec?: number;
-          runtime_limit?: number;
-          progress_pct?: number;
+          error?: string;
         }
       > = {};
-      try {
-        jobs = await getCompareStatus(jobIds);
-      } catch {
-        await new Promise((x) => setTimeout(x, POLL_INTERVAL_MS));
-        continue;
-      }
-
-      const ilsTerminal = lastIlsJob != null && ["completed", "failed", "stopped"].includes(lastIlsJob.status);
-      if (apiIls != null && jobIds.ils != null) {
-        if (ilsTerminal && lastIlsJob != null) {
-          jobs = { ...jobs, ils: lastIlsJob };
-        } else {
-          try {
-            const ilsRes = await getResult(jobIds.ils, "ils");
-            lastIlsJob = ilsRes;
-            jobs = { ...jobs, ils: ilsRes };
-          } catch {
-            if (lastIlsJob != null) jobs = { ...jobs, ils: lastIlsJob };
+      for (const { algo, data, error } of outcomes) {
+        if (error) {
+          if (algo === "ils" && apiIls != null) {
+            ilsFetchFailCount += 1;
+            if (ilsFetchFailCount >= ILS_FETCH_FAIL_THRESHOLD) {
+              jobs[algo] = {
+                status: "failed",
+                error: "Could not reach ILS backend. Check VITE_ILS_API_URL and CORS.",
+              };
+              runningAlgos.delete(algo);
+            }
+          }
+          continue;
+        }
+        if (data) {
+          ilsFetchFailCount = 0;
+          jobs[algo] = {
+            status: data.status,
+            result: data.result ?? null,
+            error: data.error,
+          };
+          if (["completed", "failed", "stopped"].includes(data.status)) {
+            runningAlgos.delete(algo);
           }
         }
       }
@@ -584,15 +577,9 @@ export function Compare() {
         }),
       );
 
-      // Only consider run complete when we have a terminal status for every algo we started
-      const allTerminal = algos.every(
-        (algo) =>
-          jobs[algo] != null &&
-          ["completed", "failed", "stopped"].includes(jobs[algo]!.status),
-      );
-      if (allTerminal) break;
-
-      await new Promise((x) => setTimeout(x, POLL_INTERVAL_MS));
+      if (runningAlgos.size > 0 && !stopRequestedRef.current) {
+        await new Promise((x) => setTimeout(x, POLL_INTERVAL_MS));
+      }
     }
     setRunning(false);
   };
@@ -690,9 +677,10 @@ export function Compare() {
               sa: {
                 init_temp: tunedValues!.saInitTemp,
                 cooling_rate: tunedValues!.saCoolingRate,
+                runtime: 600,
               },
             }
-          : undefined;
+          : { sa: { runtime: 600 }, aco: { runtime_minutes: 10 } };
 
       const compareRuntime =
         compareMode === "tuned"
@@ -842,8 +830,9 @@ export function Compare() {
                     Guided Local Search runtime = 120s; Iterated Local Search
                     runtime = 120s; Ant Colony Optimization number of ants = 30,
                     beta = 0.9, Q0 (exploit probability) = 0.9, pheromone
-                    evaporation (rho) = 0.1, runtime = 5 minutes; Simulated
-                    Annealing initial temperature = 700, cooling rate = 0.9999.
+                    evaporation (rho) = 0.1, runtime = 10 minutes; Simulated
+                    Annealing runtime = 600s (10 min), initial temperature = 700,
+                    cooling rate = 0.9999.
                   </p>
                   <p className="text-amber-800">
                     To change these defaults globally, update backend Python
@@ -1540,33 +1529,6 @@ export function Compare() {
                                 row.status.slice(1)
                             )}
                           </span>
-                          {(row.status === "running" ||
-                            row.status === "pending") &&
-                            row.progress != null && (
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className="progress-bar-track w-28 shrink-0"
-                                  role="progressbar"
-                                  aria-valuenow={row.progress.progress_pct}
-                                  aria-valuemin={0}
-                                  aria-valuemax={100}
-                                  aria-label={`${row.algo} progress`}
-                                >
-                                  <div
-                                    className="progress-bar-fill"
-                                    style={{
-                                      width: `${Math.min(
-                                        100,
-                                        Math.max(0, row.progress.progress_pct),
-                                      )}%`,
-                                    }}
-                                  />
-                                </div>
-                                <span className="w-12 shrink-0 text-right text-xs font-mono tabular-nums text-slate-500">
-                                  {row.progress.progress_pct}%
-                                </span>
-                              </div>
-                            )}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-slate-600">{row.routes}</td>
