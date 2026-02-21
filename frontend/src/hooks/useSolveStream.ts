@@ -1,3 +1,7 @@
+/**
+ * Hook for single-algo solve: opens SSE stream to /solve/{jobId}/stream for live logs and done event.
+ * Falls back to polling GET /results/{jobId} if EventSource fails (e.g. connection lost). Uses ILS base URL when algo is ILS.
+ */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiBaseUrl, getResult } from "@/lib/api";
 

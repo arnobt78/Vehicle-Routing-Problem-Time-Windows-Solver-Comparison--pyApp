@@ -1,3 +1,7 @@
+"""
+Results API: get job status/result (polling), generate route plot image.
+Plot normalizes route indices (0-based vs 1-based) for compatibility with different solvers.
+"""
 import io
 import time
 
@@ -13,6 +17,25 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 router = APIRouter(prefix="/results", tags=["results"])
+
+
+def _to_jsonable(obj):
+    """Convert numpy/scalar types to native Python so FastAPI can serialize."""
+    try:
+        import numpy as np
+        if isinstance(obj, (np.integer, np.int64, np.int32)):
+            return int(obj)
+        if isinstance(obj, (np.floating, np.float64, np.float32)):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+    except ImportError:
+        pass
+    if isinstance(obj, dict):
+        return {k: _to_jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_to_jsonable(v) for v in obj]
+    return obj
 
 
 def _job_progress(job: dict) -> dict:
@@ -35,6 +58,7 @@ def _job_progress(job: dict) -> dict:
 
 @router.get("/{job_id}")
 def get_results(job_id: str):
+    """Return job status; if completed, include result (routes, cost, runtime). If running, include progress (elapsed, limit, progress_pct)."""
     job = get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -46,11 +70,13 @@ def get_results(job_id: str):
         resp = {"status": job["status"], "result": None}
         resp.update(_job_progress(job))
         return resp
-    return {"status": "completed", "result": job["result"]}
+    result = job["result"]
+    return {"status": "completed", "result": _to_jsonable(result)}
 
 
 @router.get("/{job_id}/plot")
 def get_plot(job_id: str):
+    """Generate a PNG route plot for a completed job; normalizes 0-based routes to 1-based for display."""
     job = get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")

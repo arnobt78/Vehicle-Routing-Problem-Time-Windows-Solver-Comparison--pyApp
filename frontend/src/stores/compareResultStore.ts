@@ -1,3 +1,4 @@
+/** Persists latest compare result (dataset, rows, BKS, explanation) for "Last saved result" and optional restore on Compare page. */
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { isFresh, PERSIST_SCHEMA_VERSION } from "@/stores/persistConfig";

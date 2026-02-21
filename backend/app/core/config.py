@@ -1,3 +1,7 @@
+"""
+App config: dataset path, default runtime, and supported algorithms.
+BACKEND_ALGOS can restrict this process to a subset (e.g. main backend vs ILS-only backend).
+"""
 import os
 from pathlib import Path
 

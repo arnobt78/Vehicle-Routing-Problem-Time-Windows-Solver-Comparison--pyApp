@@ -12,6 +12,7 @@ from app.utils.instance_reader import read_solomon
 
 
 def solve_with_ils(input_path: str, runtime: int):
+    """Solve VRPTW with PyVRP 0.13+ ILS; returns (routes, cost). Routes are normalized to 1-based for plot."""
     INSTANCE = read_solomon(input_path)
     model = Model.from_data(INSTANCE)
     result = model.solve(stop=MaxRuntime(runtime), seed=0)

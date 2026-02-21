@@ -30,6 +30,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+/** Single-algorithm solve page: dataset + algo selection, parameter tuner, run/stop, live log stream, result + route plot. */
 const INPUT_STYLE =
   "w-full min-w-[200px] rounded-lg border border-slate-300 bg-white px-2 py-2.5 text-base text-slate-900 shadow-lg";
 
@@ -108,8 +109,15 @@ function SolverSkeleton() {
   );
 }
 
+/** Single-algorithm run: dataset/algo picker, parameter tuner, run/stop, live log, result and route plot. */
 export function Solver() {
-  const { data: datasets, isLoading } = useDatasets();
+  const {
+    data: datasets,
+    isLoading,
+    isError,
+    error: datasetsError,
+    refetch,
+  } = useDatasets();
   const { selectedDataset, setSelectedDataset, selectedAlgo, setSelectedAlgo } =
     useSolverStore();
   const { setLatestCompleted, clearLatestCompleted, getLatestIfFresh } =
@@ -128,20 +136,25 @@ export function Solver() {
     streamAlgo,
     running && !!jobId,
   );
-  const isIndeterminate = selectedAlgo === "sa";
+  const rmin = params.runtime_minutes;
+  const acoSaRuntimeMinutes =
+    rmin !== undefined && Number(rmin) > 0 ? Number(rmin) : null;
   const expectedRuntimeSeconds =
-    selectedAlgo === "aco"
-      ? Math.round((params.runtime_minutes ?? 5) * 60)
+    selectedAlgo === "aco" || selectedAlgo === "sa"
+      ? acoSaRuntimeMinutes != null
+        ? Math.round(acoSaRuntimeMinutes * 60)
+        : 0
       : Math.round(params.runtime ?? 120);
-  const hasRuntimeTarget = !isIndeterminate && expectedRuntimeSeconds > 0;
+  const hasRuntimeTarget = expectedRuntimeSeconds > 0;
   const runtimeProgress = hasRuntimeTarget
     ? Math.round((elapsed / expectedRuntimeSeconds) * 100)
     : 0;
+  // Cap at 99% while running so the bar feels "still working" until job actually completes
   const progress =
     status === "done" || status === "failed"
       ? 100
       : running && hasRuntimeTarget
-        ? Math.min(100, Math.max(0, runtimeProgress))
+        ? Math.min(99, Math.max(0, runtimeProgress))
         : 0;
   const { data: datasetInfo } = useQuery({
     queryKey: ["dataset", selectedDataset],
@@ -195,7 +208,13 @@ export function Solver() {
           if (jobId) {
             void (async () => {
               try {
-                const response = await fetch(getPlotUrl(jobId, selectedAlgo));
+                const plotUrl = getPlotUrl(jobId, selectedAlgo);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15_000); // 15s timeout so plot doesn't load forever when backend is slow
+                const response = await fetch(plotUrl, {
+                  signal: controller.signal,
+                });
+                clearTimeout(timeoutId);
                 if (!response.ok) return;
                 const plotBlob = await response.blob();
                 const plotDataUrl = await new Promise<string | null>(
@@ -218,7 +237,7 @@ export function Solver() {
                   plotDataUrl,
                 });
               } catch {
-                /* ignore plot cache failures */
+                /* ignore plot cache failures / timeout */
               }
             })();
           }
@@ -278,11 +297,24 @@ export function Solver() {
       "Solver job queued",
     );
     try {
+      const rminVal = params.runtime_minutes;
+      const runtimeMinutesOrNull =
+        rminVal !== undefined && Number(rminVal) > 0 ? Number(rminVal) : null;
+      const runtime =
+        selectedAlgo === "aco" || selectedAlgo === "sa"
+          ? runtimeMinutesOrNull != null
+            ? Math.round(runtimeMinutesOrNull * 60)
+            : 0
+          : (params.runtime ?? 120);
+      const paramsForApi =
+        selectedAlgo === "aco" || selectedAlgo === "sa"
+          ? { ...params, runtime_minutes: runtimeMinutesOrNull }
+          : params;
       const { job_id } = await postSolve(
         selectedAlgo,
         selectedDataset,
-        120,
-        params,
+        runtime,
+        paramsForApi,
       );
       setJobId(job_id);
     } catch {
@@ -315,6 +347,40 @@ export function Solver() {
     return <SolverSkeleton />;
   }
 
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <div className="rounded-lg border border-rose-200 bg-rose-50 p-6 text-rose-800">
+          <h2 className="mb-2 text-lg font-semibold">
+            Could not reach the backend
+          </h2>
+          <p className="mb-4 text-sm">
+            The datasets request failed or timed out. Make sure the backend is
+            running (e.g.{" "}
+            <code className="rounded bg-rose-100 px-1">
+              uvicorn app.main:app
+            </code>{" "}
+            on port 8000) and that{" "}
+            <code className="rounded bg-rose-100 px-1">VITE_API_URL</code>{" "}
+            points to it.
+          </p>
+          <p className="mb-4 text-xs text-rose-700">
+            {datasetsError instanceof Error
+              ? datasetsError.message
+              : String(datasetsError)}
+          </p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Controls card */}
@@ -328,14 +394,16 @@ export function Solver() {
               Single-Algorithm Benchmark Configuration
             </h2>
             <p className="text-base text-slate-500">
-              Run a single metaheuristic on a Solomon instance and view the
-              solution details and route plot. HGS, GLS, and ILS use fixed
-              runtime limits. ACO and SA use configurable runtimes and often
-              take at least 10–20 minutes or more on larger instances to improve
-              solution quality—plan for this when choosing an algorithm. ILS
-              runtime may differ when a separate backend is configured. Select a
+              Run one algorithm (HGS, GLS, ACO, SA (v0.6.3 backend), or ILS
+              (v0.13+ backend when configured)) on a Solomon benchmark dataset
+              and view solution details and the route plot. Allow at least 10–20
+              minutes for a full run—or more if ACO or SA run with no time limit
+              (if you keep the runtime field empty for ACO or SA, they run until
+              they stop naturally—or after 250 s with no improvement in cost or
+              vehicles; otherwise they run for the time limit you set). Select a
               dataset and algorithm, adjust parameters if needed, and click
-              &quot;Run Algorithm&quot; to start.
+              &quot;Run Algorithm&quot; to start. For quick tests, use smaller
+              instances such as C101, R101, or RC101 (100 customers).
             </p>
           </div>
         </div>
@@ -537,12 +605,12 @@ export function Solver() {
                 <div
                   className="progress-bar-track"
                   role="progressbar"
-                  aria-valuenow={isIndeterminate ? undefined : progress}
+                  aria-valuenow={hasRuntimeTarget ? progress : undefined}
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-label="Solver progress"
                 >
-                  {isIndeterminate ? (
+                  {!hasRuntimeTarget ? (
                     <div className="progress-bar-fill w-1/2" />
                   ) : (
                     <div
@@ -553,7 +621,7 @@ export function Solver() {
                     />
                   )}
                 </div>
-                {!isIndeterminate && (
+                {hasRuntimeTarget && (
                   <span className="text-sm font-mono tabular-nums">
                     {progress}%
                   </span>
@@ -620,7 +688,10 @@ export function Solver() {
             const activeJobId =
               status === "done" ? jobId : cachedSnapshot!.jobId;
             const activePlotDataUrl =
-              status === "done" ? undefined : cachedSnapshot!.plotDataUrl;
+              status === "done"
+                ? (cachedSnapshot?.plotDataUrl ?? undefined)
+                : cachedSnapshot!.plotDataUrl;
+            const preferCachedOnly = status === "done";
 
             return (
               <>
@@ -719,6 +790,7 @@ export function Solver() {
                       algo={activeAlgo ?? undefined}
                       dataset={activeDataset ?? undefined}
                       plotDataUrl={activePlotDataUrl}
+                      preferCachedOnly={preferCachedOnly}
                     />
                   </div>
                 </div>

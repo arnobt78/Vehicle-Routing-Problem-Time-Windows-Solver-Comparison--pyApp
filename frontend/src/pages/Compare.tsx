@@ -1,3 +1,7 @@
+/**
+ * Compare page: run all algorithms (HGS, GLS, ILS, ACO, SA) on one dataset.
+ * Supports Default Tune (fixed defaults) or Custom Tune (per-algo params). Polls each job until done; optional ILS on separate backend.
+ */
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { useDatasets } from "@/hooks/useDatasets";
@@ -60,6 +64,7 @@ type BenchmarkTuning = {
   acoQ0: number;
   acoRho: number;
   acoRuntimeMinutes: number;
+  saRuntimeMinutes: number;
   saInitTemp: number;
   saCoolingRate: number;
 };
@@ -81,7 +86,8 @@ const DEFAULT_BENCHMARK_TUNING: BenchmarkTuning = {
   acoBeta: 0.9,
   acoQ0: 0.9,
   acoRho: 0.1,
-  acoRuntimeMinutes: 10,
+  acoRuntimeMinutes: 15,
+  saRuntimeMinutes: 15,
   saInitTemp: 700,
   saCoolingRate: 0.9999,
 };
@@ -98,6 +104,7 @@ const TUNING_LIMITS: Record<
   acoQ0: { min: 0, max: 1, label: "ACO Q0" },
   acoRho: { min: 0, max: 1, label: "ACO rho" },
   acoRuntimeMinutes: { min: 0.5, max: 120, label: "ACO runtime (minutes)" },
+  saRuntimeMinutes: { min: 1, max: 120, label: "SA runtime (minutes)" },
   saInitTemp: { min: 10, max: 100000, label: "SA initial temperature" },
   saCoolingRate: { min: 0.8, max: 0.99999, label: "SA cooling rate" },
 };
@@ -113,6 +120,7 @@ const createBenchmarkDraft = (
   acoQ0: String(values.acoQ0),
   acoRho: String(values.acoRho),
   acoRuntimeMinutes: String(values.acoRuntimeMinutes),
+  saRuntimeMinutes: String(values.saRuntimeMinutes),
   saInitTemp: String(values.saInitTemp),
   saCoolingRate: String(values.saCoolingRate),
 });
@@ -245,10 +253,11 @@ export function Compare() {
     const { min, max } = TUNING_LIMITS[key];
 
     if (trimmed === "") {
-      return {
-        kind: "info" as const,
-        text: `Input is empty. Baseline ${DEFAULT_BENCHMARK_TUNING[key]} will be used if left empty.`,
-      };
+      const emptyMessage =
+        key === "acoRuntimeMinutes" || key === "saRuntimeMinutes"
+          ? "Leave empty to run until the algorithm stops naturally."
+          : `Input is empty. Baseline ${DEFAULT_BENCHMARK_TUNING[key]} will be used if left empty.`;
+      return { kind: "info" as const, text: emptyMessage };
     }
 
     const parsed = Number(trimmed);
@@ -288,10 +297,17 @@ export function Compare() {
     key: K,
     raw: string,
   ) => {
-    const warning = validateTuningField(key, raw);
+    // For ACO/SA runtime, treat empty or "0" as empty (natural run); show blank in UI.
+    const normalized =
+      (key === "acoRuntimeMinutes" || key === "saRuntimeMinutes") &&
+      (raw.trim() === "" || raw.trim() === "0")
+        ? ""
+        : raw;
+
+    const warning = validateTuningField(key, normalized);
 
     setBenchmarkTuningDraft((prev) => {
-      const next = { ...prev, [key]: raw };
+      const next = { ...prev, [key]: normalized };
       if (!warning) {
         setLatestTuneSummary({
           status: "edited",
@@ -443,7 +459,7 @@ export function Compare() {
 
   const getTuningInputClass = (key: keyof BenchmarkTuning) =>
     cn(
-      "mt-1 w-full rounded-lg border border-slate-300 px-2 py-2.5 text-base",
+      "mt-1 w-full rounded-lg border border-slate-300 px-2 py-2.5 text-base text-slate-600",
       highlightedTuningKeys[key] &&
         "ring-2 ring-sky-400 border-sky-400 animate-pulse",
     );
@@ -479,6 +495,8 @@ export function Compare() {
   }, [running, rows.length]);
 
   const POLL_INTERVAL_MS = 2500;
+  /** Max wait per GET /results/{job_id} so one slow/hung request doesn't block the whole round. */
+  const POLL_REQUEST_TIMEOUT_MS = 8000;
 
   const fetchResults = async (
     jobIds: Record<string, string>,
@@ -523,14 +541,29 @@ export function Compare() {
     const ILS_FETCH_FAIL_THRESHOLD = 3;
 
     while (runningAlgos.size > 0 && !stopRequestedRef.current) {
+      // Poll only jobs still running; each request has a timeout so one hung request
+      // doesn't block the round. When a job returns completed/failed/stopped we remove
+      // it from runningAlgos so we stop polling that job_id.
       const jobPromises = Array.from(runningAlgos).map(async (algo) => {
         const jobId = jobIds[algo];
-        try {
-          const data = await getResult(jobId, algo);
-          return { algo, data, error: null };
-        } catch (err) {
-          return { algo, data: null, error: err };
-        }
+        return Promise.race([
+          getResult(jobId, algo).then((data) => ({ algo, data, error: null })),
+          new Promise<{
+            algo: string;
+            data: null;
+            error: unknown;
+          }>((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  algo,
+                  data: null,
+                  error: new Error("Poll timeout"),
+                }),
+              POLL_REQUEST_TIMEOUT_MS,
+            ),
+          ),
+        ]).catch((err) => ({ algo, data: null, error: err }));
       });
       const outcomes = await Promise.all(jobPromises);
 
@@ -549,7 +582,8 @@ export function Compare() {
             if (ilsFetchFailCount >= ILS_FETCH_FAIL_THRESHOLD) {
               jobs[algo] = {
                 status: "failed",
-                error: "Could not reach ILS backend. Check VITE_ILS_API_URL and CORS.",
+                error:
+                  "Could not reach ILS backend. Check VITE_ILS_API_URL and CORS.",
               };
               runningAlgos.delete(algo);
             }
@@ -640,6 +674,7 @@ export function Compare() {
     );
   };
 
+  /** Start compare: POST /solve/compare with (default or custom) params; if Option A, start ILS on ILS backend and merge job_ids; then poll until all complete. */
   const handleCompare = async () => {
     if (!dataset) return;
 
@@ -662,34 +697,46 @@ export function Compare() {
       setBksRouteCount(ds.bks_routes?.length ?? null);
 
       const compareParams =
-        compareMode === "tuned"
-          ? {
-              hgs: { runtime: tunedValues!.hgsRuntime },
-              gls: { runtime: tunedValues!.glsRuntime },
-              ils: { runtime: tunedValues!.ilsRuntime },
-              aco: {
-                ants_num: tunedValues!.acoAntsNum,
-                beta: tunedValues!.acoBeta,
-                q0: tunedValues!.acoQ0,
-                rho: tunedValues!.acoRho,
-                runtime_minutes: tunedValues!.acoRuntimeMinutes,
-              },
-              sa: {
-                init_temp: tunedValues!.saInitTemp,
-                cooling_rate: tunedValues!.saCoolingRate,
-                runtime: 600,
-              },
-            }
-          : { sa: { runtime: 600 }, aco: { runtime_minutes: 10 } };
+        compareMode === "tuned" && tunedValues
+          ? (() => {
+              const acoRaw = (
+                benchmarkTuningDraft.acoRuntimeMinutes ?? ""
+              ).trim();
+              const acoRmin =
+                acoRaw !== "" && Number(acoRaw) > 0 ? Number(acoRaw) : null;
+              const saRaw = (
+                benchmarkTuningDraft.saRuntimeMinutes ?? ""
+              ).trim();
+              const saRmin =
+                saRaw !== "" && Number(saRaw) > 0 ? Number(saRaw) : null;
+              return {
+                hgs: { runtime: tunedValues.hgsRuntime },
+                gls: { runtime: tunedValues.glsRuntime },
+                ils: { runtime: tunedValues.ilsRuntime },
+                aco: {
+                  ants_num: tunedValues.acoAntsNum,
+                  beta: tunedValues.acoBeta,
+                  q0: tunedValues.acoQ0,
+                  rho: tunedValues.acoRho,
+                  runtime_minutes: acoRmin,
+                },
+                sa: {
+                  init_temp: tunedValues.saInitTemp,
+                  cooling_rate: tunedValues.saCoolingRate,
+                  runtime_minutes: saRmin,
+                },
+              };
+            })()
+          : { sa: { runtime_minutes: 15 }, aco: { runtime_minutes: 15 } };
 
       const compareRuntime =
-        compareMode === "tuned"
+        compareMode === "tuned" && tunedValues
           ? Math.max(
-              tunedValues!.hgsRuntime,
-              tunedValues!.glsRuntime,
-              tunedValues!.ilsRuntime,
+              tunedValues.hgsRuntime,
+              tunedValues.glsRuntime,
+              tunedValues.ilsRuntime,
             )
-          : 60;
+          : 120;
 
       let job_ids: Record<string, string> = (
         await postCompare(dataset, compareRuntime, compareParams)
@@ -697,10 +744,10 @@ export function Compare() {
       // When using two backends (Option A), main backend may not run ILS; start ILS on ILS backend and merge.
       if (apiIls != null && job_ids.ils == null) {
         const ilsRuntime =
-          compareMode === "tuned" ? tunedValues!.ilsRuntime : 60;
+          compareMode === "tuned" && tunedValues ? tunedValues.ilsRuntime : 120;
         const ilsParams =
-          compareMode === "tuned"
-            ? { runtime: tunedValues!.ilsRuntime }
+          compareMode === "tuned" && tunedValues
+            ? { runtime: tunedValues.ilsRuntime }
             : undefined;
         const { job_id } = await postSolve(
           "ils",
@@ -723,7 +770,8 @@ export function Compare() {
           "All algorithms finished. Check the table for results.",
         );
       }
-    } catch {
+    } catch (err) {
+      console.error("Compare benchmark error:", err);
       toast.error("Benchmark failed", "Could not run comparison");
     } finally {
       setRunning(false);
@@ -751,16 +799,17 @@ export function Compare() {
               Multi-Algorithm Benchmark Configuration
             </h2>
             <p className="text-base text-slate-500">
-              Benchmark Hybrid Genetic Search, Guided Local Search, Ant Colony
-              Optimization, Simulated Annealing, and Iterated Local Search run
-              on a single dataset simultaneously to compare performance (minimum
-              runtime at least 10–20 minutes or more). ACO and SA can take
-              longer on larger instances because they lack a fixed runtime
-              parameter, and ILS runtime may vary when a separate backend is
-              used. Choose a dataset and click "Run Algorithms" to start. When
-              it finishes, review the results table and use "Explain results"
-              for AI insights. For quick checks, try smaller instances (100
-              customers): C101, R101, or RC101.
+              Run all five algorithms (HGS, GLS, ACO, SA (using v0.6.3 backend
+              container), ILS (using v0.13+ backend container)) on one dataset
+              at once and compare cost, routes, and runtime. Allow at least
+              10–20 minutes for a full run—or more if ACO or SA run with no time
+              limit (if you keep runtime empty for ACO or SA, they run until
+              they stop naturally—or after 250 s with no improvement in cost or
+              vehicles; otherwise they run for the time limit you set). Choose a
+              dataset and click &quot;Run Algorithms&quot;; when done, check the
+              results table and use &quot;Explain results&quot; for AI insights.
+              For quick tests, use smaller instances such as C101, R101, or
+              RC101 (100 customers).
             </p>
           </div>
         </div>
@@ -830,9 +879,9 @@ export function Compare() {
                     Guided Local Search runtime = 120s; Iterated Local Search
                     runtime = 120s; Ant Colony Optimization number of ants = 30,
                     beta = 0.9, Q0 (exploit probability) = 0.9, pheromone
-                    evaporation (rho) = 0.1, runtime = 10 minutes; Simulated
-                    Annealing runtime = 600s (10 min), initial temperature = 700,
-                    cooling rate = 0.9999.
+                    evaporation (rho) = 0.1, runtime = 15 minutes; Simulated
+                    Annealing runtime = 900s (15 min), initial temperature =
+                    700, cooling rate = 0.9999.
                   </p>
                   <p className="text-amber-800">
                     To change these defaults globally, update backend Python
@@ -1147,7 +1196,7 @@ export function Compare() {
                         step="0.5"
                         min={0.5}
                         max={120}
-                        value={benchmarkTuningDraft.acoRuntimeMinutes}
+                        value={benchmarkTuningDraft.acoRuntimeMinutes ?? ""}
                         placeholder={String(
                           DEFAULT_BENCHMARK_TUNING.acoRuntimeMinutes,
                         )}
@@ -1169,7 +1218,10 @@ export function Compare() {
                         </p>
                       ) : null}
                       <p className="mt-1 text-[11px] text-slate-500">
-                        Allowed range: 0.5 to 120 minutes.
+                        Leave empty to run until the algorithm stops naturally
+                        (stops after 50 checks of 5 s each, i.e. 250 s, with no
+                        improvement in cost or vehicle count), or set a time
+                        limit (e.g. 5–15+ min) for predictable results.
                       </p>
                     </label>
                   </div>
@@ -1235,6 +1287,41 @@ export function Compare() {
                   ) : null}
                   <p className="mt-1 text-[11px] text-slate-500">
                     Allowed range: 0.8 to 0.99999.
+                  </p>
+                  <label className="mt-2 block text-xs text-slate-600">
+                    Runtime (minutes)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={120}
+                    step={1}
+                    value={benchmarkTuningDraft.saRuntimeMinutes ?? ""}
+                    placeholder={String(
+                      DEFAULT_BENCHMARK_TUNING.saRuntimeMinutes,
+                    )}
+                    onChange={(e) =>
+                      applyTuningInput("saRuntimeMinutes", e.target.value)
+                    }
+                    className={getTuningInputClass("saRuntimeMinutes")}
+                  />
+                  {tuningWarnings.saRuntimeMinutes ? (
+                    <p
+                      className={cn(
+                        "mt-1 text-[11px]",
+                        getTuningWarningClass(
+                          tuningWarnings.saRuntimeMinutes.kind,
+                        ),
+                      )}
+                    >
+                      {tuningWarnings.saRuntimeMinutes.text}
+                    </p>
+                  ) : null}
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Leave empty to run until the algorithm stops naturally
+                    (stops after 50 checks of 5 s each, i.e. 250 s, with no
+                    improvement in cost or vehicle count), or set a time limit
+                    (e.g. 5–15+ min) for predictable results.
                   </p>
                 </div>
               </div>
@@ -1526,7 +1613,7 @@ export function Compare() {
                               </span>
                             ) : (
                               row.status.charAt(0).toUpperCase() +
-                                row.status.slice(1)
+                              row.status.slice(1)
                             )}
                           </span>
                         </div>

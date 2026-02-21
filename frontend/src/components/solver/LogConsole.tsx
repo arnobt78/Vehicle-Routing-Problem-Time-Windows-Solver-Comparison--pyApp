@@ -1,3 +1,4 @@
+/** Displays execution log lines with optional typewriter effect on the last line while streaming. */
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 

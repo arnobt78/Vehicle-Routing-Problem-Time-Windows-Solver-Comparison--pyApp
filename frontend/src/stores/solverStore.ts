@@ -1,3 +1,4 @@
+/** Persists selected dataset and algorithm on the Solver page (no persistence across reload). */
 import { create } from "zustand";
 
 interface SolverState {

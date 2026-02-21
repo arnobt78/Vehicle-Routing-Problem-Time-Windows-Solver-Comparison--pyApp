@@ -1,3 +1,7 @@
+"""
+Solve API: start single-algo or compare jobs, stop job, stream logs via SSE.
+All solve work runs in background threads; this module only creates jobs and delegates to solver_executor.
+"""
 import asyncio
 import json
 import time
@@ -37,6 +41,7 @@ def _job_progress(job: dict) -> dict:
 
 
 def _get_compare_params_for_algo(params: dict | None, algo: str) -> dict | None:
+    """Extract params for one algorithm from compare body: body.params can have keys like 'hgs', 'gls', 'aco'; merge shared + per-algo."""
     if not isinstance(params, dict):
         return None
 
@@ -56,6 +61,7 @@ def _get_compare_params_for_algo(params: dict | None, algo: str) -> dict | None:
 
 @router.post("/compare")
 def post_compare(body: SolveRequest):
+    """Start one job per supported algorithm (same dataset); returns job_ids keyed by algo name."""
     job_ids = {}
     for algo in sorted(SUPPORTED_ALGOS):
         job_id = create_job(body.dataset, algo)
@@ -94,6 +100,7 @@ def post_compare_status(body: CompareStatusRequest):
 
 @router.post("/{algo}")
 def post_solve(algo: str, body: SolveRequest):
+    """Start a single-algorithm solve job; returns job_id for polling and streaming."""
     algo_lower = algo.lower()
     if algo_lower not in SUPPORTED_ALGOS:
         raise HTTPException(status_code=400, detail=f"Algorithm not supported on this backend. Supported: {sorted(SUPPORTED_ALGOS)}")
@@ -123,6 +130,7 @@ def _sse_format(event: str, data: str) -> str:
 
 @router.get("/{job_id}/stream")
 async def stream_solve(job_id: str):
+    """SSE stream: new log lines and final status/result when job completes or fails."""
     job = get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")

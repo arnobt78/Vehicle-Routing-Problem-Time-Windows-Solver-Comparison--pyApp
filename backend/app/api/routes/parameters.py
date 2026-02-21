@@ -1,3 +1,4 @@
+"""Parameters API: get or update default parameters per algorithm (stored in DEFAULT_PARAMS in memory)."""
 from fastapi import APIRouter, HTTPException
 
 from app.api.models.request_models import DEFAULT_PARAMS

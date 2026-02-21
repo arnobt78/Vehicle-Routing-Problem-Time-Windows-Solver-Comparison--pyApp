@@ -1,3 +1,7 @@
+"""
+FastAPI app: VRPTW solve/compare, results, datasets, parameters, AI (suggest/explain/tune), RAG.
+CORS is configured for localhost and optional CORS_ORIGINS; RAG index can bootstrap on startup.
+"""
 import os
 import threading
 from pathlib import Path

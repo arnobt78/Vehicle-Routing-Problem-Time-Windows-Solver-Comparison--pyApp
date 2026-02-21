@@ -1,4 +1,4 @@
-# Vehicle Routing Problem with Time Windows (VRPTW) Solver Comparison — React, Python, Metaheuristics, RAG, AI Agent, NLP, Optimization Full-Stack Project
+# Vehicle Routing Problem with Time Windows (VRPTW) Solver Comparison — React, Python, Metaheuristics, RAG, AI Agent, NLP, Optimization Full-Stack Research Project
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Vite](https://img.shields.io/badge/Vite-7.2-646CFF)](https://vitejs.dev/)
@@ -7,7 +7,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-green)](https://fastapi.tiangolo.com/)
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12-3776AB)](https://www.python.org/)
 
-A full-stack **Vehicle Routing Problem with Time Windows (VRPTW)** comparison platform. Run and benchmark metaheuristic algorithms (HGS, ILS, ACO, Simulated Annealing, GLS), visualize routes, tune parameters, and explore Solomon benchmark datasets—with an optional AI-assisted RAG Q&A and parameter tuning.
+A full-stack R&D (Research & Development) **Vehicle Routing Problem with Time Windows (VRPTW)** comparison platform. Run and benchmark metaheuristic algorithms (Hybrid Genetic Search (HGS), Iterated Local Search (ILS), Ant Colony Optimization (ACO), Simulated Annealing (SA), Guided Local Search (GLS)), visualize routes, tune parameters, and explore Solomon benchmark datasets—with an optional AI-assisted RAG Q&A, result explanation and parameter tuning capabilities.
 
 - **Live-Demo:** [https://vrptw-solver.vercel.app/](https://vrptw-solver.vercel.app/)
 - **Backend 0.6.3 version:** [https://vrptw-api.arnobmahmud.com/](https://vrptw-api.arnobmahmud.com/)
@@ -212,14 +212,17 @@ Route #12: 95 33 32 30 28 26 27 29 31 80
 
 ## Features & Functionalities
 
-| Feature                    | Description                                                                                              |
-| -------------------------- | -------------------------------------------------------------------------------------------------------- |
-| **Run single algorithm**   | Pick dataset, algorithm (HGS/ILS/ACO/SA/GLS), runtime, optional params; stream logs and view route plot. |
-| **Compare all algorithms** | Run all supported algorithms on one dataset; see merged results and plots. Default runtimes: HGS, GLS, ILS 120s; ACO 10 min; SA 10 min. Each job is polled independently and the table updates as each completes. |
-| **Parameter tuning**       | Auto-tune algorithm parameters via AI (optional; requires `GOOGLE_GEMINI_API_KEY`).                      |
-| **Datasets & BKS**         | List Solomon instances, download instance/BKS files, view metadata.                                      |
-| **Experiment results**     | Browse pre-generated test result sets and experiment summaries (if `test_results` is available).         |
-| **RAG Q&A**                | Ask questions about algorithms (optional; requires RAG dependencies and optional Gemini).                |
+| Feature                    | Description                                                                                                                                                                                                       |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Run single algorithm**   | Pick dataset, algorithm (HGS/ILS/ACO/SA/GLS), runtime, optional params; stream logs and view route plot. Allow 10–20+ minutes for a full run—or more if ACO or SA run with no time limit. Leave the runtime field **empty** to run until the algorithm stops naturally (empty is sent as null; ACO and SA stop after 50 checks of 5 s each, i.e. 250 s, with no improvement in cost or vehicle count), or set a time limit (e.g. 5–15+ min) for predictable results.                                                                                                          |
+| **Compare all algorithms** | Run all supported algorithms on one dataset; see merged results and plots. Default runtimes: HGS, GLS, ILS 120s; ACO 15 min; SA 15 min. Allow 10–30+ minutes for a full run—or more if ACO or SA run naturally (leave the runtime field **empty** for no time limit; empty is treated as 0 and sent as null; otherwise it runs for the runtime you set). Each job is polled independently and the table updates as each completes. |
+| **Parameter tuning**       | Auto-tune algorithm parameters via AI (optional; requires `GOOGLE_GEMINI_API_KEY`).                                                                                                                               |
+| **Datasets & BKS**         | List Solomon instances, download instance/BKS files, view metadata.                                                                                                                                               |
+| **Experiment results**     | Browse pre-generated test result sets and experiment summaries (if `test_results` is available).                                                                                                                  |
+| **RAG Q&A**                | Ask questions about algorithms (optional; requires RAG dependencies and optional Gemini).                                                                                                                         |
+
+- **GLS runtime:** The app sends the requested limit (e.g. 120 s) to OR-Tools. OR-Tools with Guided Local Search can run past that limit (known behavior); the reported “Solution Runtime” is wall-clock time, so you may see e.g. ~360 s when 120 s was requested.
+- **ACO & SA runtime (empty):** If you leave the runtime field empty, ACO and SA run until they stop naturally. They stop early after 50 checks of 5 s each (250 s total) with no improvement in cost or vehicle count; otherwise they run for the time limit you set. Set a time limit (e.g. 5–15+ min) for predictable run duration.
 
 ---
 
@@ -377,57 +380,89 @@ All `VITE_*` variables are embedded at **build time**; change and rebuild for pr
 
 ## How to Run
 
-### Single backend (HGS, GLS, ACO, SA; ILS only if pyvrp ≥0.13 in same venv)
+Choose one of two setups:
 
-**Terminal 1 – Backend:**
+| Setup | Terminals | Use when |
+|-------|-----------|----------|
+| **Single backend** | 1 = Main backend, 2 = Frontend | You only need HGS, GLS, ACO, SA (or ILS too if pyvrp ≥0.13 is in the same venv). |
+| **Option A (two backends)** | 1 = Main backend, 2 = ILS backend, 3 = Frontend | You want all 5 algorithms; pyvrp 0.6.3 and 0.13 cannot coexist in one venv. |
+
+**Terminal 1 – Main backend (pyVRP v0.6.3, HGS, GLS, ACO, SA, RAG, AI model):**
 
 ```bash
-cd backend
-source venv/bin/activate
+cd backend && source venv/bin/activate
+# Option A only: restrict this process to HGS, GLS, ACO, SA
+# export BACKEND_ALGOS=hgs,gls,aco,sa
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**Terminal 2 – Frontend:**
+**What to expect:** Uvicorn runs on **http://0.0.0.0:8000**. With `BACKEND_ALGOS` set (Option A), health returns `["aco", "gls", "hgs", "sa"]`; otherwise all installed algos (including ILS if pyvrp ≥0.13).
+
+**Terminal 2 – ILS backend (pyVRP v0.13+) — Option A only:**
 
 ```bash
-cd frontend
-npm run dev
-```
-
-Open **<http://localhost:5173>**.
-
----
-
-### Option A: All 5 algorithms (two backends)
-
-Because **pyvrp 0.6.3** (HGS) and **pyvrp ≥0.13** (ILS) cannot coexist in one venv, run two backends:
-
-**Terminal 1 – Main backend (HGS, GLS, ACO, SA):**
-
-```bash
-cd backend
-source venv/bin/activate
-export BACKEND_ALGOS=hgs,gls,aco,sa
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-**Terminal 2 – ILS backend:**
-
-```bash
-cd backend
-source venv-ils/bin/activate
+cd backend && source venv-ils/bin/activate
 export BACKEND_ALGOS=ils
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
-**Terminal 3 – Frontend:** Set `VITE_ILS_API_URL=http://localhost:8001` in `frontend/.env`, then:
+**What to expect:** Second backend on **http://0.0.0.0:8001**; health returns `["ils"]`. Skip this terminal when using single backend.
+
+**Terminal 2 (single) / Terminal 3 (Option A) – Frontend:**
+
+For Option A, set `VITE_ILS_API_URL=http://localhost:8001` in `frontend/.env`. Then:
 
 ```bash
-cd frontend
-npm run dev
+cd frontend && npm run dev
 ```
 
+**What to expect:** App at **<http://localhost:5173>**; single backend uses port 8000 only; Option A uses main backend for HGS/GLS/ACO/SA and ILS backend for ILS.
+
 See **RUN.md** and **DEPLOYMENT.md** for ILS venv setup and production deployment.
+
+---
+
+### Verify APIs (local or production)
+
+Use these commands to confirm backends and RAG are up. Replace the base URL with your local or production host.
+
+**Local – main backend (e.g. after starting Terminal 1):**
+
+```bash
+curl -s http://localhost:8000/api/health
+curl -s http://localhost:8000/api/datasets
+curl -s http://localhost:8000/api/ai/rag/status
+```
+
+**Local – ILS backend (e.g. after starting Terminal 2 in Option A):**
+
+```bash
+curl -s http://localhost:8001/api/health
+curl -s http://localhost:8001/api/datasets
+curl -s http://localhost:8001/api/ai/rag/status
+```
+
+**Production – main backend (pyvrp 0.6.3):**
+
+```bash
+curl -s https://vrptw-api.arnobmahmud.com/api/health
+curl -s https://vrptw-api.arnobmahmud.com/api/datasets
+curl -s https://vrptw-api.arnobmahmud.com/api/ai/rag/status
+```
+
+**Production – ILS backend (pyvrp 0.13+):**
+
+```bash
+curl -s https://vrptw-ils.arnobmahmud.com/api/health
+curl -s https://vrptw-ils.arnobmahmud.com/api/datasets
+curl -s https://vrptw-ils.arnobmahmud.com/api/ai/rag/status
+```
+
+**What to expect:**
+
+- **`/api/health`** — JSON with `"status": "ok"` and `"algorithms": ["aco", "gls", "hgs", "sa"]` (main) or `["ils"]` (ILS).
+- **`/api/datasets`** — JSON with `"datasets": ["c101", "r101", ...]` (list of instance names).
+- **`/api/ai/rag/status`** — JSON with `"available": true|false` and optional `"reason"` (RAG is optional; `available: false` is normal if RAG deps are not installed).
 
 ---
 

@@ -1,3 +1,7 @@
+"""
+Simulated annealing loop: neighbour generation, accept by improvement or Metropolis criterion, optional max_runtime_sec and should_stop.
+When no_improvement_logs is set (natural run), stops after that many log intervals with no improvement in (distance, vehicles).
+"""
 import random
 from copy import deepcopy
 from math import exp
@@ -20,6 +24,8 @@ def sa_algorithm(
     logger=None,
     log_every_seconds=2.0,
     max_runtime_sec=None,
+    should_stop=None,
+    no_improvement_logs: int | None = None,
 ):
     curr_solution = incumb_solution = deepcopy(instance)
     # print("Inside sa: ", instance.get_total_distance_and_vehicles())
@@ -37,8 +43,12 @@ def sa_algorithm(
     afterFiveMin, cFiveMin = None, 0
     total = None
     incumb_vhcls_o = objective_function(incumb_vhcls, incumb_dist)
+    last_logged_incumb = (incumb_dist, incumb_vhcls)
+    no_improvement_log_count = 0
 
     while not stop_criterion(temp):
+        if should_stop is not None and callable(should_stop) and should_stop():
+            break
         if max_runtime_sec is not None and (time.time() - start) >= max_runtime_sec:
             break
         iter_count += 1
@@ -70,6 +80,19 @@ def sa_algorithm(
                 f"vehicles={incumb_vhcls}, temp={temp:.4f}, elapsed={elapsed:.1f}s"
             )
             last_log_time = time.time()
+            # Early stop: no improvement for N consecutive log lines (only when no fixed runtime)
+            if no_improvement_logs is not None:
+                if (incumb_dist, incumb_vhcls) == last_logged_incumb:
+                    no_improvement_log_count += 1
+                    if no_improvement_log_count >= no_improvement_logs:
+                        if logger:
+                            logger(
+                                f"SA: stopping after {no_improvement_logs} log intervals with no improvement"
+                            )
+                        break
+                else:
+                    no_improvement_log_count = 0
+                    last_logged_incumb = (incumb_dist, incumb_vhcls)
         if not afterOneMin and time.time() - start >= 60:
             afterOneMin, cOneMin = deepcopy(incumb_solution), counter
         if not afterFiveMin and time.time() - start >= 5 * 60:

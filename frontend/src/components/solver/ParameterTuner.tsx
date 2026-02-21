@@ -1,8 +1,15 @@
+/**
+ * Parameter tuner for the selected algorithm: schema-driven inputs (ALGO_PARAM_SCHEMAS), sync with API baseline, optional AI suggest.
+ * For ACO/SA, runtime_minutes empty is sent as null (natural run with early stop); other algos use runtime in seconds.
+ */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getAiSuggest, getParameters } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { Loader2, Sparkles } from "lucide-react";
+
+const RUNTIME_HINT_ACO_SA =
+  "Leave empty to run until the algorithm stops naturally (stops after 50 checks of 5 s each, i.e. 250 s, with no improvement in cost or vehicle count), or set a time limit (e.g. 5–15+ min) for predictable results.";
 
 const ALGO_PARAM_SCHEMAS: Record<
   string,
@@ -13,6 +20,8 @@ const ALGO_PARAM_SCHEMAS: Record<
     max: number;
     step: number;
     description?: string;
+    rangeHint?: string;
+    defaultPlaceholder?: string;
   }[]
 > = {
   aco: [
@@ -52,9 +61,10 @@ const ALGO_PARAM_SCHEMAS: Record<
       key: "runtime_minutes",
       label: "Runtime (min)",
       min: 1,
-      max: 10,
+      max: 120,
       step: 1,
       description: "Maximum optimization time budget in minutes.",
+      rangeHint: RUNTIME_HINT_ACO_SA,
     },
   ],
   gls: [
@@ -75,6 +85,16 @@ const ALGO_PARAM_SCHEMAS: Record<
       max: 1200,
       step: 50,
       description: "Starting acceptance level for uphill moves.",
+    },
+    {
+      key: "runtime_minutes",
+      label: "Runtime (minutes)",
+      min: 1,
+      max: 120,
+      step: 1,
+      description: "Maximum optimization time in minutes.",
+      rangeHint: RUNTIME_HINT_ACO_SA,
+      defaultPlaceholder: "15",
     },
     {
       key: "cooling_rate",
@@ -127,10 +147,11 @@ type TuneSummary = {
 };
 type ParamEditSummary = {
   fieldLabel: string;
-  value: number;
+  value: number | null; // null = "empty" (e.g. runtime = natural run)
   savedAt: number;
 };
 
+/** Renders algo-specific parameter inputs from ALGO_PARAM_SCHEMAS; supports AI suggest and shows "Latest Parameter Update" when runtime is cleared. */
 export function ParameterTuner({
   algo,
   dataset,
@@ -174,7 +195,11 @@ export function ParameterTuner({
         setBaselineParams(p);
         const nextDrafts: Record<string, string> = {};
         Object.entries(p).forEach(([key, value]) => {
-          nextDrafts[key] = String(value);
+          if (key === "runtime_minutes" && value === 0) {
+            nextDrafts[key] = "";
+          } else {
+            nextDrafts[key] = String(value);
+          }
         });
         setInputDrafts(nextDrafts);
       })
@@ -188,7 +213,12 @@ export function ParameterTuner({
       const next = { ...prev };
       schema.forEach(({ key }) => {
         if (typeof params[key] === "number") {
-          next[key] = String(params[key]);
+          // Show empty in UI for runtime_minutes when 0 (natural run); backend still gets null.
+          if (key === "runtime_minutes" && params[key] === 0) {
+            next[key] = "";
+          } else {
+            next[key] = String(params[key]);
+          }
         }
       });
       return next;
@@ -267,10 +297,17 @@ export function ParameterTuner({
     min: number,
     max: number,
     baseline: number | undefined,
+    paramKey?: string,
   ) => {
     const trimmed = raw.trim();
 
     if (trimmed === "") {
+      if (paramKey === "runtime_minutes") {
+        return {
+          kind: "info" as const,
+          text: "Leave empty to run until the algorithm stops naturally.",
+        };
+      }
       return baseline != null
         ? {
             kind: "info" as const,
@@ -452,7 +489,11 @@ export function ParameterTuner({
               {latestParamEditSummary.fieldLabel}
             </span>
             {" · "}Value:{" "}
-            <span className="font-medium">{latestParamEditSummary.value}</span>
+            <span className="font-medium">
+              {latestParamEditSummary.value === null
+                ? "Empty (natural run)"
+                : latestParamEditSummary.value}
+            </span>
           </p>
           <p className="mt-1 text-xs text-sky-800/80">
             Updated:{" "}
@@ -509,7 +550,9 @@ export function ParameterTuner({
         />
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        {schema.map(({ key, label, min, max, step, description }) => (
+        {schema.map((s) => {
+          const { key, label, min, max, step, description } = s;
+          return (
           <div
             key={key}
             className="rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
@@ -531,10 +574,11 @@ export function ParameterTuner({
                   ? String(baselineParams[key])
                   : params[key] != null
                     ? String(params[key])
-                    : ""
+                    : (s.defaultPlaceholder ?? "")
               }
               onChange={(e) => {
                 const raw = e.target.value;
+                const trimmed = raw.trim();
                 setInputDrafts((prev) => ({ ...prev, [key]: raw }));
 
                 const warning = validateInput(
@@ -542,12 +586,30 @@ export function ParameterTuner({
                   min,
                   max,
                   baselineParams[key],
+                  key,
                 );
 
                 const timeoutId = warningTimeoutsRef.current[key];
                 if (timeoutId) {
                   clearTimeout(timeoutId);
                   delete warningTimeoutsRef.current[key];
+                }
+
+                // When user clears runtime_minutes, notify parent so it sends null (natural run).
+                if (key === "runtime_minutes" && trimmed === "") {
+                  setInputWarnings((prev) => {
+                    if (!prev[key]) return prev;
+                    const next = { ...prev };
+                    delete next[key];
+                    return next;
+                  });
+                  setLatestParamEditSummary({
+                    fieldLabel: label,
+                    value: null,
+                    savedAt: Date.now(),
+                  });
+                  onChange({ ...params, [key]: 0 });
+                  return;
                 }
 
                 if (warning) {
@@ -571,7 +633,7 @@ export function ParameterTuner({
                   return next;
                 });
 
-                const parsed = Number(raw.trim());
+                const parsed = Number(trimmed);
                 if (!Number.isFinite(parsed)) return;
                 setLatestParamEditSummary({
                   fieldLabel: label,
@@ -599,10 +661,11 @@ export function ParameterTuner({
               </p>
             ) : null}
             <p className="mt-1 text-[11px] text-slate-500">
-              Allowed range: {min} to {max}.
+              {s.rangeHint ?? `Allowed range: ${min} to ${max}.`}
             </p>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

@@ -1,3 +1,7 @@
+"""
+Multiple Ant Colony System (MACS): two colonies in parallel—one minimizes distance (fixed vehicles), one minimizes vehicle count.
+Supports runtime limit, optional early stop after N×5s with no improvement, and should_stop callback for user stop.
+"""
 import numpy as np
 import random
 from aco.vprtw_aco_figure import VrptwAcoFigure
@@ -427,6 +431,8 @@ class MultipleAntColonySystem:
         file_to_write_path=None,
         logger=None,
         log_every_seconds: float = 2.0,
+        should_stop=None,
+        no_improvement_iters: int | None = None,
     ):
         """
         Start another thread to run multiple_ant_colony_system, and use the main thread to draw
@@ -455,6 +461,8 @@ class MultipleAntColonySystem:
                 file_to_write_path,
                 logger,
                 log_every_seconds,
+                should_stop=should_stop,
+                no_improvement_iters=no_improvement_iters,
             )
         # print("Finished:", self.best_path)
         # print("Finished distance:", self.best_path_distance)
@@ -466,6 +474,8 @@ class MultipleAntColonySystem:
         file_to_write_path=None,
         logger=None,
         log_every_seconds: float = 2.0,
+        should_stop=None,
+        no_improvement_iters: int | None = None,
     ):
         """
         Call acs_time and acs_vehicle to explore paths
@@ -480,6 +490,8 @@ class MultipleAntColonySystem:
         start_time_total = time.time()
         last_log_time = start_time_total
         iteration = 0
+        no_improvement_count = 0
+        last_logged_best = None  # (cost, vehicles) at last "ACO iter N" log
 
         # Two queues are needed here, time_what_to_do and vehicle_what_to_do, to tell the two threads acs_time and acs_vehicle what the current best path is, or to stop them from calculating.
         global_path_to_acs_time = Queue()
@@ -500,8 +512,15 @@ class MultipleAntColonySystem:
 
         while True:
             iteration += 1
+            cost_at_start = self.best_path_distance.value
+            vehicles_at_start = self.best_vehicle_num
             # print("[multiple_ant_colony_system]: new iteration")
             start_time_found_improved_solution = time.time()
+            user_stopped = False
+            last_early_stop_check_time = time.time()
+            early_stop_best_at_check = (self.best_path_distance.value, self.best_vehicle_num)
+            request_early_stop = False
+            no_improvement_count = 0  # reset each outer iteration so improvement clears the streak
 
             if logger and (time.time() - last_log_time) >= log_every_seconds:
                 elapsed = time.time() - start_time_total
@@ -515,6 +534,31 @@ class MultipleAntColonySystem:
                     )
                 )
                 last_log_time = time.time()
+                # Early stop when runtime empty: 25 consecutive log lines with same best
+                if no_improvement_iters is not None:
+                    current_best = (
+                        self.best_path_distance.value,
+                        self.best_vehicle_num,
+                    )
+                    if last_logged_best is None:
+                        last_logged_best = current_best
+                    elif current_best == last_logged_best:
+                        no_improvement_count += 1
+                        if no_improvement_count >= no_improvement_iters:
+                            if logger:
+                                logger(
+                                    "ACO: stopping after %d log intervals with no improvement"
+                                    % no_improvement_iters
+                                )
+                            if self.whether_or_not_to_show_figure:
+                                path_queue_for_figure.put(PathMessage(None, None))
+                            if file_to_write is not None:
+                                file_to_write.flush()
+                                file_to_write.close()
+                            return
+                    else:
+                        no_improvement_count = 0
+                        last_logged_best = current_best
 
             # The current best path information is placed in the queue to inform acs_time and acs_vehicle what the current best_path is.
             global_path_to_acs_vehicle.put(
@@ -570,8 +614,44 @@ class MultipleAntColonySystem:
             best_vehicle_num = self.best_vehicle_num
 
             while acs_vehicle_thread.is_alive() and acs_time_thread.is_alive():
+                # User requested stop (e.g. Stop button in UI)
+                if should_stop is not None and callable(should_stop) and should_stop():
+                    user_stopped = True
+                    stop_event.set()
+                # Early stop (runtime empty): every 5s check if best unchanged for 50 checks (~250s)
+                if (
+                    not request_early_stop
+                    and no_improvement_iters is not None
+                    and (time.time() - last_early_stop_check_time) >= log_every_seconds
+                ):
+                    last_early_stop_check_time = time.time()
+                    current_best = (
+                        self.best_path_distance.value,
+                        self.best_vehicle_num,
+                    )
+                    if current_best == early_stop_best_at_check:
+                        no_improvement_count += 1
+                        if no_improvement_count >= no_improvement_iters:
+                            if logger:
+                                logger(
+                                    "ACO: stopping after %d intervals (%.0fs) with no improvement"
+                                    % (no_improvement_iters, no_improvement_iters * log_every_seconds)
+                                )
+                            request_early_stop = True
+                            stop_event.set()
+                    else:
+                        no_improvement_count = 0
+                        early_stop_best_at_check = current_best
+                # Hard cap: stop after total runtime (same behavior as SA / other algos)
+                if time.time() - start_time_total >= 60 * self.runtime_in_minutes:
+                    stop_event.set()
+                    if self.whether_or_not_to_show_figure:
+                        path_queue_for_figure.put(PathMessage(None, None))
+                    if file_to_write is not None:
+                        file_to_write.flush()
+                        file_to_write.close()
+                    return
                 # If no better results are found within the specified time, exit the program
-                # given_time = 5
                 if (
                     time.time() - start_time_found_improved_solution
                     > 60 * self.runtime_in_minutes
@@ -714,6 +794,41 @@ class MultipleAntColonySystem:
                     # print("[macs]: send stop info to acs_time and acs_vehicle")
                     # Notify acs_vehicle and acs_time threads of the currently found best_path and best_path_distance
                     stop_event.set()
+
+            # After inner while: check user stop or early stop (no improvement; only when no fixed runtime)
+            if request_early_stop:
+                if self.whether_or_not_to_show_figure:
+                    path_queue_for_figure.put(PathMessage(None, None))
+                if file_to_write is not None:
+                    file_to_write.flush()
+                    file_to_write.close()
+                return
+            if user_stopped:
+                if self.whether_or_not_to_show_figure:
+                    path_queue_for_figure.put(PathMessage(None, None))
+                if file_to_write is not None:
+                    file_to_write.flush()
+                    file_to_write.close()
+                return
+            if no_improvement_iters is not None and (
+                self.best_path_distance.value,
+                self.best_vehicle_num,
+            ) == (cost_at_start, vehicles_at_start):
+                no_improvement_count += 1
+                if no_improvement_count >= no_improvement_iters:
+                    if logger:
+                        logger(
+                            "ACO: stopping after %d iterations with no improvement"
+                            % no_improvement_iters
+                        )
+                    if self.whether_or_not_to_show_figure:
+                        path_queue_for_figure.put(PathMessage(None, None))
+                    if file_to_write is not None:
+                        file_to_write.flush()
+                        file_to_write.close()
+                    return
+            else:
+                no_improvement_count = 0
 
     def get_best_route(self):
         if not self.best_path:

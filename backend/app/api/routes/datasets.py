@@ -1,3 +1,7 @@
+"""
+Datasets API: list instance names, get metadata (BKS cost/routes), download single instance or all as zip.
+Instance files are expected in DATASET_PATH (Solomon .txt); optional .sol files for known best cost/routes.
+"""
 import io
 import zipfile
 from pathlib import Path
@@ -43,6 +47,7 @@ def _parse_plain_bks(sol_path: Path):
 
 @router.get("")
 def list_datasets():
+    """Return sorted list of dataset names (stem of each .txt file in DATASET_PATH)."""
     base = Path(DATASET_PATH)
     if not base.exists():
         return {"datasets": []}

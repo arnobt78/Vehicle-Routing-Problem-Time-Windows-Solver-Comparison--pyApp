@@ -1,12 +1,20 @@
+/**
+ * API client for VRPTW backend: health, datasets, solve (single + compare), results, plot, parameters, AI.
+ * Supports optional separate ILS backend (VITE_ILS_API_URL) for Option A deployment.
+ */
 import axios from "axios";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 /** When set, ILS requests (solve/stream/results/plot) use this backend (Option A: two backends). */
 const ILS_API_URL = import.meta.env.VITE_ILS_API_URL;
 
+/** Request timeout (ms). Prevents infinite loading when backend is unreachable. */
+const API_TIMEOUT_MS = 25_000;
+
 export const api = axios.create({
   baseURL: `${API_URL}/api`,
   headers: { "Content-Type": "application/json" },
+  timeout: API_TIMEOUT_MS,
 });
 
 /** Base URL for health/status (no /api prefix for timing). */
@@ -133,6 +141,7 @@ export const apiIls =
     ? axios.create({
         baseURL: `${ILS_API_URL}/api`,
         headers: { "Content-Type": "application/json" },
+        timeout: API_TIMEOUT_MS,
       })
     : null;
 
